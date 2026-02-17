@@ -1,5 +1,5 @@
-<p align="center">
-  <img src="man/figures/logo.png" width="300">
+<p align="right">
+  <img src="man/figures/logo.png" width="200">
 </p>
 
 # RNASAIL
