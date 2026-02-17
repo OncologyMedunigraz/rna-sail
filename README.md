@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="man/figures/logo.png" width="300">
+</p>
+
 # RNASAIL
 
 RNASAIL is an R package providing a full RNA‑seq analysis workflow, including differential expression, pathway analysis, transcription factor activity, immune infiltration, WGCNA, and LINCS connectivity scoring.
