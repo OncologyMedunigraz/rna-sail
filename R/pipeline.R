@@ -14,11 +14,13 @@
 #' @param experiment_name Name for the experiment
 #' @param output_dir Output directory
 #' @param species Species ("mouse" or "human", default: "mouse")
+#' @param remove_samples Character vector of sample names to remove (optional)
+#' @param extra_pathways_file Path to Pathways file (XLSX format)
+#' @param run_ssgsea Whether to run ssGSEA analysis (default: TRUE)
 #' @param run_wgcna Whether to run WGCNA analysis (default: TRUE)
 #' @param run_tf_analysis Whether to run transcription factor analysis (default: TRUE)
 #' @param run_immune_analysis Whether to run immune deconvolution (default: TRUE)
 #' @param run_lincs_analysis Whether to run LINCS connectivity analysis (default: TRUE)
-#' @param remove_samples Character vector of sample names to remove (optional)
 #' @return List containing results from all analyses
 #' @export
 run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file,
@@ -26,10 +28,15 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
                                  condition_column = "condition",
                                  sample_id_column = "SampleID",
                                  experiment_name, output_dir, species = "mouse",
-                                 run_wgcna = TRUE, run_tf_analysis = TRUE,
+                                 remove_samples = NULL, covariates = NULL,
+                                 design_formula = NULL, contrast_string = NULL,
+                                 run_wgcna = TRUE, run_tf_analysis = TRUE, run_ssgsea=TRUE,
                                  run_immune_analysis = TRUE, run_lincs_analysis = TRUE,
-                                 remove_samples = NULL, lfc_threshold = 1,color_volcano_up="#CA3433",color_volcano_down="#2B7CB6",genes_to_label=NULL,covariates = NULL, design_formula = NULL, contrast_string = NULL,
-                                 fdr_threshold = 0.05,point_size_volcano=4,label_size_volcano=5,n_labels_up=10,n_labels_down=10,gsea_custom_pathways=NULL,n_gsea_enrich_up=5,n_gsea_enrich_down=5, color_gsea_down="#2B7CB6", color_gsea_up="#CA3433",color_gsea_ns="#C5C6C7",run_ssgsea=TRUE, ssgsea_extra_pathways=NULL, ssgsea_n_boxplot_pathways = 20)
+                                 lfc_threshold = 1, color_volcano_up = "#CA3433", color_volcano_down = "#2B7CB6", genes_to_label = NULL,
+                                 fdr_threshold = 0.05, point_size_volcano = 4, label_size_volcano = 5, n_labels_up = 10, n_labels_down = 10,
+                                 n_gsea_enrich_up = 5, n_gsea_enrich_down = 5, ssgsea_n_boxplot_pathways = 20,
+                                 color_gsea_down = "#2B7CB6", color_gsea_up = "#CA3433", color_gsea_ns = "#C5C6C7",
+                                 extra_pathways_file = NULL)
   {
 
   # Start timing
@@ -180,10 +187,14 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   # ========== 4. Pathway Analysis ==========
   message("\nStep 4: Pathway analysis...")
 
+  extra_pathways <- if (!is.null(extra_pathways_file)) retrieve_pathway(extra_pathways_file, species, rownames(pc_tpm_processed)) else NULL
+  
+  
   # GSEA analysis
   gsea_results <- run_gsea_analysis(
     de_results = de_results$de_results$efit,
-    species = ifelse(species == "mouse", "MM", "HS")
+    species = ifelse(species == "mouse", "MM", "HS"),
+    extra_pathways = extra_pathways
   )
 
   # Extract gene sets and ranks once here
@@ -244,7 +255,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
       group1           = group1_condition,
       group2           = group2_condition,
       species          = species,
-      extra_pathways   = ssgsea_extra_pathways,
+      extra_pathways   = extra_pathways,
       output_dir       = output_dir,
       experiment_name  = experiment_name,
       n_boxplot_pathways = ssgsea_n_boxplot_pathways
