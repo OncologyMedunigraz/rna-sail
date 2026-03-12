@@ -3,7 +3,7 @@ Type: Package
 Title: Comprehensive RNA-seq Analysis Pipeline
 Version: 2.0.0
 Author: Your Name <your.email@example.com>
-Maintainer: Michele Spanu michele.spanu@medunigraz.at | michele.spanu76@gmail.com
+Maintainer: Michele <michele.spanu@medunigraz.at>
 Description: A comprehensive R package for RNA-seq data analysis including 
     differential expression analysis, pathway analysis, WGCNA co-expression 
     networks, transcription factor analysis, and immune deconvolution.
