@@ -3,17 +3,18 @@
 #' Performs Gene Set Enrichment Analysis using fgsea on differential expression results.
 #'
 #' @param de_results Differential expression results from limma (efit object or data frame)
-#' @param species Species for gene sets ("Mus musculus" or "Homo sapiens")
+#' @param species Species for gene sets ("MM" or "HS")
 #' @param category MSigDB category (default: "H" for Hallmark)
 #' @param subcategory MSigDB subcategory (default: NULL)
 #' @param min_size Minimum gene set size (default: 15)
 #' @param max_size Maximum gene set size (default: 500)
 #' @param n_perm Number of permutations (default: 100000)
+#' @param extra_pathways Named list with the extra pathways to consider (optional)
 #' @return fgsea results data frame
 #' @export
-run_gsea_analysis <- function(de_results, species = "Mus musculus", category = "H",
+run_gsea_analysis <- function(de_results, species = "MM", category = "H",
                               subcategory = NULL, min_size = 15, max_size = 500,
-                              n_perm = 100000) {
+                              n_perm = 100000, extra_pathways = NULL) {
 
   # Check required packages
   required_pkgs <- c("fgsea", "msigdbr", "limma")
@@ -50,7 +51,17 @@ run_gsea_analysis <- function(de_results, species = "Mus musculus", category = "
   }
 
   gene_sets <- split(gene_sets_df$ensembl_gene, gene_sets_df$gs_name)
+
   message("Loaded ", length(gene_sets), " gene sets")
+  
+  # Add user-provided pathways if given
+  if (!is.null(extra_pathways)) {
+    if (!is.list(extra_pathways) || is.null(names(extra_pathways))) {
+      stop("extra_pathways must be a *named* list: list(PATHWAY1 = c('ENSG...'), PATHWAY2 = ...)")
+    }
+    gene_sets <- c(gene_sets, extra_pathways)
+    message("Added ", length(extra_pathways), " user-defined pathways to Hallmark sets")
+  }
 
   # Prepare rankings
   if (is.data.frame(de_results)) {
