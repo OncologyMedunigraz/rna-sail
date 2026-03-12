@@ -602,21 +602,21 @@ retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
                                      dataset = if (species=="mouse")  "mmusculus_gene_ensembl" else "hsapiens_gene_ensembl")
       
       if ("NCBI" %in% colnames(excel.df)) {
-        n <- length(unique(excel.df$NCBI))
+        n <- length(unique(excel.df$NCBI)) - if (any(is.na(excel.df$NCBI))) 1 else 0
         gene_IDs <- biomaRt::getBM(attributes = c("entrezgene_id", "ensembl_gene_id", "external_gene_name"),
                                    filters = "entrezgene_id", values = unique(excel.df$NCBI), 
                                    mart = ensembl, useCache = FALSE)
       } else {
         if ("Symbol" %in% colnames(excel.df)) {
-          n <- length(unique(excel.df$Symbol))
-          gene_IDs <- biomaRt::getBM(attributes = c("hgnc_symbol", "ensembl_gene_id"),
+          n <- length(unique(excel.df$Symbol)) - if (any(is.na(excel.df$NCBI))) 1 else 0
+          gene_IDs <- biomaRt::getBM(attributes = c("hgnc_symbol", "ensembl_gene_id", "entrezgene_id"),
                                      filters = "hgnc_symbol", values = unique(excel.df$Symbol),
                                      mart = ensembl, useCache = TRUE)
         } else  stop("There is no column with NCBI, ENSEMBL, or Symbol ID in sheet:", pathway)
       }
       
       pathway_list[[pathway]] <- unique(gene_IDs$ensembl_gene_id)
-      message(pathway, " pathway has been added with ", length(pathway_list[[pathway]]), " genes found out of ", n)
+      message(pathway, " pathway has been added with ", length(unique(gene_IDs$entrezgene_id)), " genes found out of ", n)
       
       if (!is.null(matrix_row_names)) {
         matrix_row_ensembl <- sapply(matrix_row_names, function(x) strsplit(x, split="_")[[1]][2])
