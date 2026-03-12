@@ -259,7 +259,7 @@ run_ssgsea_analysis <- function(
       legend.position = "bottom"
     ) +
     ggplot2::labs(
-      title = "ssGSEA scores – top pathways",
+      title = "ssGSEA scores - top pathways",
       x     = NULL,
       y     = "ssGSEA score"
     )
