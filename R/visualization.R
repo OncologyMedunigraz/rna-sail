@@ -323,18 +323,25 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
 #' @param scale_data Whether to z-score scale the data (default: TRUE)
 #' @param color_mapping Named list of color mappings for annotations (optional)
 #' @param output_file Output file path (optional)
-#' @param width Plot width (default: 10)
+#' @param min.width Plot minimum width to which add the dynamic width (default: 5)
 #' @param height Plot height (default: 8)
+#' @param col_cluster Whether to cluster samples (default: TRUE)
+#' @param rank_order Whether to sort genes by variability prior to selection (default: TRUE)
+#' @param long_heatmap Whether to plot a long heatmap with gene labels (default: FALSE)
 #' @return ComplexHeatmap object or base heatmap
 #' @export
 create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n_genes = 500,
                                       scale_data = TRUE, color_mapping = NULL,
-                                      output_file = NULL, width = 10, height = 8) {
+                                      output_file = NULL, min.width = 5, height = 8,
+                                      title = NULL, col_cluster = TRUE, rank_order = TRUE,
+                                      long_heatmap = FALSE) {
+    
   message("starting heatmap ")
 
   gene_vars <- apply(expr_data, 1, var, na.rm = TRUE)
-  top_genes <- names(sort(gene_vars, decreasing = TRUE))[1:min(n_genes, nrow(expr_data))]
-  expr_subset <- expr_data[top_genes, ]
+  # !!! Added last three pars to the fn, and here changed the top_genes criterion !!!
+  top_genes <- if (rank_order) names(sort(gene_vars, decreasing = TRUE))[1:min(n_genes, nrow(expr_data))] else names(gene_vars)
+  expr_subset <- expr_data[top_genes, , drop = FALSE]
 
   expr_scaled <- if (scale_data) t(scale(t(expr_subset))) else as.matrix(expr_subset)
   message("starting heatmap 1")
@@ -343,64 +350,89 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
   sample_order <- match(colnames(expr_scaled), metadata$SampleID)
   metadata_ordered <- metadata[sample_order, , drop = FALSE]
   metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
-  expr_scaled <- expr_scaled[, colnames(expr_scaled) %in% metadata_ordered$SampleID]
+  expr_scaled <- expr_scaled[, colnames(expr_scaled) %in% metadata_ordered$SampleID, drop = FALSE]
   message("starting heatmap 2")
   if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
       requireNamespace("circlize", quietly = TRUE)) {
 
-    annotation_data <- metadata_ordered[annotation_columns, drop = FALSE]
-    col_list <- list()
-    message("starting heatmap 3")
-    print(annotation_columns)
-    for (col in annotation_columns) {
-      unique_vals <- unique(annotation_data[[col]])
+      annotation_data <- metadata_ordered[,annotation_columns, drop = FALSE]
+      col_list <- list()
+      message("starting heatmap 3")
+      print(annotation_columns)
+      for (col in annotation_columns) {
+          unique_vals <- unique(annotation_data[[col]])
 
-      if (!is.null(color_mapping) && !is.null(color_mapping[[col]])) {
-        col_list[[col]] <- color_mapping[[col]]
-      } else if (is.factor(unique_vals) || is.character(unique_vals)) {
-        colors <- RColorBrewer::brewer.pal(min(length(unique_vals), 8), "Set1")[1:length(unique_vals)]
-        col_list[[col]] <- setNames(colors, unique_vals)
+          if (!is.null(color_mapping) && !is.null(color_mapping[[col]])) {
+              col_list[[col]] <- color_mapping[[col]]
+          } else if (is.factor(unique_vals) || is.character(unique_vals)) {
+              # !!! Palette creation within Set1 => further colours can be interpolated !!!
+              pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
+              # !!! Must check grDevices is installed !!!
+              colors <- pal(length(unique_vals))
+              col_list[[col]] <- setNames(colors, unique_vals)
+          }
       }
-    }
-    message("starting heatmap 4")
-    print(col_list)
-    ha <- ComplexHeatmap::HeatmapAnnotation(
-      df = annotation_data,
-      col = col_list
-    )
-    message("starting heatmap 5")
+      
+      message("starting heatmap 4")
+      print(col_list)
+      ha <- ComplexHeatmap::HeatmapAnnotation(
+          df = annotation_data,
+          col = col_list
+      )
+      message("starting heatmap 5")
 
-    if (!is.null(output_file)) pdf(output_file, width = width, height = height)
-    message("starting heatmap 6")
+      if (!is.null(output_file)) {
+          # !!! Creates the folder if it doesn't exist (useful if fn called by itself) !!!
+          dir.create(
+              dirname(output_file),
+              recursive = TRUE,
+              showWarnings = FALSE
+          )
+          # !!! Dynamic width and length!!!
+          height <- if (long_heatmap) 4+0.15*length(top_genes) else height
+          pdf(output_file, width = min.width+0.18*ncol(expr_scaled), height = height)
+      }
+      
+      message("starting heatmap 6")
+      
+      # !!! Fixed colour intensity scale for non-norm. data, show_row_names, row_names_side, row_name_gp, col_cluster, title !!!
+      ht <- ComplexHeatmap::Heatmap(
+          expr_scaled,
+          name = ifelse(scale_data, "Expression Z-score", "Expression"),
+          col = circlize::colorRamp2(
+              if (scale_data) c(-2, 0, 2) else {c(min(expr_scaled, na.rm = TRUE), 0, max(expr_scaled, na.rm = TRUE))},
+              c("blue", "white", "red")
+          ),
+          top_annotation = ha,
+          show_row_names = long_heatmap,
+          row_names_side = "left",
+          row_names_gp = grid::gpar(fontsize = 10),
+          show_column_names = TRUE,
+          cluster_rows = TRUE,
+          cluster_columns = col_cluster,
+          column_title = if (!is.null(title)) title else paste("Expression Heatmap -", n_genes, "Most Variable Genes"),
+          heatmap_legend_param = list(direction = "vertical")
+      )
 
-    ht <- ComplexHeatmap::Heatmap(
-      expr_scaled,
-      name = ifelse(scale_data, "Expression\n(Z-score)", "Expression"),
-      col = circlize::colorRamp2(
-        if (scale_data) c(-2, 0, 2) else range(expr_scaled, na.rm = TRUE),
-        c("blue", "white", "red")
-      ),
-      top_annotation = ha,
-      show_row_names = FALSE,
-      show_column_names = TRUE,
-      cluster_rows = TRUE,
-      cluster_columns = TRUE,
-      column_title = paste("Expression Heatmap -", n_genes, "Most Variable Genes"),
-      heatmap_legend_param = list(direction = "vertical")
-    )
+      ComplexHeatmap::draw(ht)
+      if (!is.null(output_file)) {
+          dev.off()
+          message("Expression heatmap saved to: ", output_file)
+      }
 
-    print(ht)
-    if (!is.null(output_file)) {
-      dev.off()
-      message("Expression heatmap saved to: ", output_file)
-    }
-
-    return(ht)
-
+      return(ht)
   } else {
+
+      
     stop("ComplexHeatmap and circlize packages are required for heatmap plotting.")
   }
 }
+
+
+
+
+
+                       
 #' Create MA Plot
 #'
 #' Creates an MA plot (log ratio vs mean average) from differential expression results.
