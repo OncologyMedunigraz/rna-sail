@@ -3,17 +3,18 @@
 #' Performs Gene Set Enrichment Analysis using fgsea on differential expression results.
 #'
 #' @param de_results Differential expression results from limma (efit object or data frame)
-#' @param species Species for gene sets ("Mus musculus" or "Homo sapiens")
+#' @param species Species for gene sets ("MM" or "HS")
 #' @param category MSigDB category (default: "H" for Hallmark)
 #' @param subcategory MSigDB subcategory (default: NULL)
 #' @param min_size Minimum gene set size (default: 15)
 #' @param max_size Maximum gene set size (default: 500)
 #' @param n_perm Number of permutations (default: 100000)
+#' @param extra_pathways Named list with the extra pathways to consider (optional)
 #' @return fgsea results data frame
 #' @export
-run_gsea_analysis <- function(de_results, species = "Mus musculus", category = "H",
+run_gsea_analysis <- function(de_results, species = "MM", category = "H",
                               subcategory = NULL, min_size = 15, max_size = 500,
-                              n_perm = 100000) {
+                              n_perm = 100000, extra_pathways = NULL) {
 
   # Check required packages
   required_pkgs <- c("fgsea", "msigdbr", "limma")
@@ -50,7 +51,17 @@ run_gsea_analysis <- function(de_results, species = "Mus musculus", category = "
   }
 
   gene_sets <- split(gene_sets_df$ensembl_gene, gene_sets_df$gs_name)
+
   message("Loaded ", length(gene_sets), " gene sets")
+  
+  # Add user-provided pathways if given
+  if (!is.null(extra_pathways)) {
+    if (!is.list(extra_pathways) || is.null(names(extra_pathways))) {
+      stop("extra_pathways must be a *named* list: list(PATHWAY1 = c('ENSG...'), PATHWAY2 = ...)")
+    }
+    gene_sets <- c(gene_sets, extra_pathways)
+    message("Added ", length(extra_pathways), " user-defined pathways to Hallmark sets")
+  }
 
   # Prepare rankings
   if (is.data.frame(de_results)) {
@@ -548,4 +559,77 @@ save_pathway_results <- function(gsea_results, camera_results = NULL, experiment
   }
 
   invisible()
+}
+
+
+
+
+                                     
+
+#' Retrive Custom Pathways
+#'
+#' @param file.path the pathway to an excel file with each sheet named 
+#' after the specific pathway and inside a table with at least one of the 
+#' following cols (named like that): "NCBI", "ENSEMBL", and/or "Symbol"
+#' @param species either "human" or "mouse"
+#' @param matrix_row_names the row names of the RNA-Seq data matrix (if available)
+#'
+#' @return a named list with the pathways and the respective genes
+#' @export
+retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
+  
+  # Check required packages
+  required_pkgs <- c("readxl", "biomaRt")
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required but not installed")
+    }
+  }
+  
+  
+  pathway_list <- list()
+  
+  
+  pathway_names <- readxl::excel_sheets(file.path)
+  for (pathway in pathway_names) {
+    excel.df <- readxl::read_excel(file.path, sheet=pathway)
+    
+    if ("ENSEMBL" %in% colnames(excel.df)) {
+      n <- length(unique(excel.df$ENSEMBL))
+      pathway_list[[pathway]] <- unique(excel.df$ENSEMBL)
+    } else {
+      ensembl <- biomaRt::useEnsembl(biomart = "genes", 
+                                     dataset = if (species=="mouse")  "mmusculus_gene_ensembl" else "hsapiens_gene_ensembl")
+      
+      if ("NCBI" %in% colnames(excel.df)) {
+        n <- length(unique(excel.df$NCBI)) - if (any(is.na(excel.df$NCBI))) 1 else 0
+        gene_IDs <- biomaRt::getBM(attributes = c("entrezgene_id", "ensembl_gene_id", "external_gene_name"),
+                                   filters = "entrezgene_id", values = unique(excel.df$NCBI), 
+                                   mart = ensembl, useCache = FALSE)
+      } else {
+        if ("Symbol" %in% colnames(excel.df)) {
+          n <- length(unique(excel.df$Symbol)) - if (any(is.na(excel.df$NCBI))) 1 else 0
+          gene_IDs <- biomaRt::getBM(attributes = c("hgnc_symbol", "ensembl_gene_id", "entrezgene_id"),
+                                     filters = "hgnc_symbol", values = unique(excel.df$Symbol),
+                                     mart = ensembl, useCache = TRUE)
+        } else  stop("There is no column with NCBI, ENSEMBL, or Symbol ID in sheet:", pathway)
+      }
+      
+      pathway_list[[pathway]] <- unique(gene_IDs$ensembl_gene_id)
+      message(pathway, " pathway has been added with ", length(unique(gene_IDs$entrezgene_id)), " genes found out of ", n)
+      
+      if (!is.null(matrix_row_names)) {
+        matrix_row_ensembl <- sapply(matrix_row_names, function(x) strsplit(x, split="_")[[1]][2])
+        remove.ind <- which(!pathway_list[[pathway]] %in% matrix_row_ensembl)
+        
+        if (length(remove.ind)>0) {
+          message("\nThe following genes were not found in the expression data:")
+          print(pathway_list[[pathway]][remove.ind])
+          pathway_list[[pathway]] <- pathway_list[[pathway]][-remove.ind]
+        }
+      }
+    }
+  }
+  
+  return(pathway_list)
 }

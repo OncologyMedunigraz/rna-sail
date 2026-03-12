@@ -159,7 +159,7 @@ run_ssgsea_analysis <- function(
     show_rownames  = TRUE,
     show_colnames  = FALSE,
     fontsize_row   = 6,
-    main           = "ssGSEA – pathway activity"
+    main           = "ssGSEA - pathway activity"
   )
   print(heatmap_file)
   grDevices::dev.off()
@@ -259,7 +259,7 @@ run_ssgsea_analysis <- function(
       legend.position = "bottom"
     ) +
     ggplot2::labs(
-      title = "ssGSEA scores – top pathways",
+      title = "ssGSEA scores - top pathways",
       x     = NULL,
       y     = "ssGSEA score"
     )
