@@ -3,7 +3,11 @@ citHeader("Please cite RNA SAIL when using it in published research:")
 citEntry(
   entry = "misc",
   title = "RNA SAIL: RNA Sequencing Analysis and Interpretation Library",
-  author = "VIZAR CISAROVA, Katarina",
+  author = c(
+    person("Katarina", "Vizar Cisarova"),
+    person("Michele", "Spanu")
+  ),
   year = "2026",
-  url = "https://github.com/OncologyMedunigraz/rna-sail"
+  url = "https://github.com/OncologyMedunigraz/rna-sail",
+  note = "Maintainer: Michele Spanu"
 )
