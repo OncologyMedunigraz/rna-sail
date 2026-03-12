@@ -159,7 +159,7 @@ run_ssgsea_analysis <- function(
     show_rownames  = TRUE,
     show_colnames  = FALSE,
     fontsize_row   = 6,
-    main           = "ssGSEA – pathway activity"
+    main           = "ssGSEA - pathway activity"
   )
   print(heatmap_file)
   grDevices::dev.off()
