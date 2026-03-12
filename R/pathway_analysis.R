@@ -549,3 +549,76 @@ save_pathway_results <- function(gsea_results, camera_results = NULL, experiment
 
   invisible()
 }
+
+
+
+
+                                     
+
+#' Retrive Custom Pathways
+#'
+#' @param file.path the pathway to an excel file with each sheet named 
+#' after the specific pathway and inside a table with at least one of the 
+#' following cols (named like that): "NCBI", "ENSEMBL", and/or "Symbol"
+#' @param species either "human" or "mouse"
+#' @param matrix_row_names the row names of the RNA-Seq data matrix (if available)
+#'
+#' @return a named list with the pathways and the respective genes
+#' @export
+retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
+  
+  # Check required packages
+  required_pkgs <- c("readxl", "biomaRt")
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required but not installed")
+    }
+  }
+  
+  
+  pathway_list <- list()
+  
+  
+  pathway_names <- readxl::excel_sheets(file.path)
+  for (pathway in pathway_names) {
+    excel.df <- readxl::read_excel(file.path, sheet=pathway)
+    
+    if ("ENSEMBL" %in% colnames(excel.df)) {
+      n <- length(unique(excel.df$ENSEMBL))
+      pathway_list[[pathway]] <- unique(excel.df$ENSEMBL)
+    } else {
+      ensembl <- biomaRt::useEnsembl(biomart = "genes", 
+                                     dataset = if (species=="mouse")  "mmusculus_gene_ensembl" else "hsapiens_gene_ensembl")
+      
+      if ("NCBI" %in% colnames(excel.df)) {
+        n <- length(unique(excel.df$NCBI))
+        gene_IDs <- biomaRt::getBM(attributes = c("entrezgene_id", "ensembl_gene_id", "external_gene_name"),
+                                   filters = "entrezgene_id", values = unique(excel.df$NCBI), 
+                                   mart = ensembl, useCache = FALSE)
+      } else {
+        if ("Symbol" %in% colnames(excel.df)) {
+          n <- length(unique(excel.df$Symbol))
+          gene_IDs <- biomaRt::getBM(attributes = c("hgnc_symbol", "ensembl_gene_id"),
+                                     filters = "hgnc_symbol", values = unique(excel.df$Symbol),
+                                     mart = ensembl, useCache = TRUE)
+        } else  stop("There is no column with NCBI, ENSEMBL, or Symbol ID in sheet:", pathway)
+      }
+      
+      pathway_list[[pathway]] <- unique(gene_IDs$ensembl_gene_id)
+      message(pathway, " pathway has been added with ", length(pathway_list[[pathway]]), " genes found out of ", n)
+      
+      if (!is.null(matrix_row_names)) {
+        matrix_row_ensembl <- sapply(matrix_row_names, function(x) strsplit(x, split="_")[[1]][2])
+        remove.ind <- which(!pathway_list[[pathway]] %in% matrix_row_ensembl)
+        
+        if (length(remove.ind)>0) {
+          message("\nThe following genes were not found in the expression data:")
+          print(pathway_list[[pathway]][remove.ind])
+          pathway_list[[pathway]] <- pathway_list[[pathway]][-remove.ind]
+        }
+      }
+    }
+  }
+  
+  return(pathway_list)
+}
