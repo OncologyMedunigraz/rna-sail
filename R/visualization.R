@@ -336,6 +336,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
   expr_subset <- expr_data[top_genes, , drop = FALSE]
 
   expr_scaled <- if (scale_data) t(scale(t(expr_subset))) else as.matrix(expr_subset)
+  expr_scaled[is.na(expr_scaled)] <- 0
   message("starting heatmap 1")
 
   colnames(expr_scaled) <- gsub("^X", "", colnames(expr_scaled))
