@@ -69,6 +69,7 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
 
   # Create new rownames: GeneSymbol_geneID
   annotated_expr$gene_name_id <- paste0(gene_symbol, "_", annotated_expr$gene_id_clean)
+  annotated_expr <- as.data.frame(annotated_expr)
   rownames(annotated_expr) <- annotated_expr$gene_name_id
 
   # Drop metadata columns but KEEP gene_name_id
