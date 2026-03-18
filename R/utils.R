@@ -124,3 +124,45 @@ check_packages <- function(required_pkgs) {
     }
   }
 }
+
+
+#' P-value Calculator for the fn plot_gene_expression()
+#'
+#' @param data a dataframe with a column containing the gene expr values and more
+#' @param facet.col name of the column according to which group
+#' @param y.col name of the column with gene data
+#' @param x.col name of the column of inside grouping
+#' @param stat_test the kind of stat_test to perform
+#' @param p_correction the type of p_correction to implement (default: "none")
+#'
+#' @return df with the p-vals for the various comparisons
+#' @export
+PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "none") {
+  
+  CheckPackages(c("dplyr", "ggpubr"))
+  
+  comps <- combn(levels(factor(data[[x.col]])), m = 2, simplify = FALSE)
+  
+  res <- ggpubr::compare_means(
+    formula    = as.formula(paste(y.col, "~", x.col)),
+    data       = data,
+    method     = stat_test,
+    comparisons = comps,
+    p.adjust.method = p_correction,
+    group.by   = facet.col
+  )
+  
+  # Calculate y positions row-wise using mapply
+  # (avoids coercion to character matrix)
+  res$y.position <- mapply(function(g1, g2, facet_val) {
+    max(data[data[[x.col]] %in% c(g1, g2) & data[[facet.col]] == facet_val, y.col])
+  }, res$group1, res$group2, res[[facet.col]])
+  
+  # Offset y positions per facet to avoid label overlap
+  res <- res %>%
+    dplyr::group_by(.data[[facet.col]]) %>%
+    dplyr::mutate(y.position = y.position + seq(0, by = 0.1, length.out = dplyr::n())) %>%
+    dplyr::ungroup()
+  
+  return(res)
+}
