@@ -616,3 +616,115 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
 #'
 #' Creates a volcano plot from limma differential expression results.
 #
+
+
+
+
+
+#' Plot of Gene Expression for a selected set of genes (log(TPM+1) is used)
+#'
+#' @param results the object obtained by running run_complete_pipeline
+#' @param gene_vector a vector of gene symbols or ENSEMBL IDs (or mixture)
+#' @param output_dir the path where to save the plot
+#' @param group_by name of the column whose values will correspond to a single barplot in the plot
+#' @param facet_by name of the column whose values will correspond to a single plot
+#' @param remove_samples names of the samples to remove
+#' @param species either "human" or "mouse" (default: "human")
+#' @param stat_test what test to use in the boxplot (default: "wilcox.test")
+#' @param p_correction what p-val correction to use in the boxplot (default: "fdr")
+#' @param col_cluster bool to cluster columns (default: TRUE)
+#' @param row_cluster bool to cluster rows (default: TRUE)
+#' @param plot_title name to assign to the plot (default: NULL)
+#' @param ext file extension (default: "pdf")
+#' @param file_name (default: "Expression_heatmap_of_selected_genes")
+#' @param ... extra parameters for create_expression_heatmap()
+#'
+#' @return prints the plot and saves it in the specified directory
+#' @export
+plot_gene_expression <- function(results, gene_vector, output_dir,
+                                 group_by="cell_line", facet_by="condition",
+                                 remove_samples=NULL, species = "human",
+                                 stat_test="wilcox.test", p_correction="fdr",
+                                 col_cluster=TRUE, row_cluster=TRUE, plot_title=NULL, ext="pdf", 
+                                 file_name="Expression_heatmap_of_selected_genes", ...) {
+
+  required_pkgs <- c("ggplot2", "ggpubr", "ComplexHeatmap", "circlize")
+  CheckPackages(required_pkgs)
+
+  RNAseqData <- results$preprocessing
+  
+  # Removing indicated samples
+  if (!is.null(remove_samples)) {
+    remove_ind <- RNAseqData$metadata$SampleID %in% remove_samples
+    RNAseqData$metadata <- RNAseqData$metadata[!remove_ind,]
+    RNAseqData$pc_tpm <- RNAseqData$pc_tpm[,!remove_ind]
+  }
+
+  #Check if Symbol has been used
+  prefix_ensembl <- switch(species, human = "ENSG", mouse = "ENSMUSG")
+  
+  gene_vector <- ifelse(grepl(prefix_ensembl, gene_vector),
+                        gene_vector,
+                        paste0("^", gene_vector, "_"))
+  
+  
+  chunks <- split(gene_vector, ceiling(seq_along(gene_vector) / 50))
+  ind <- unlist(lapply(chunks, function(chunk) {
+    grep(paste(chunk, collapse = "|"), rownames(RNAseqData$pc_tpm))
+  }), recursive = T)
+  
+  
+  # Recovered genes
+  genes_tpc <- RNAseqData$pc_tpm[ind, ,
+                                 drop=F]
+
+  gene_vector <- unique(rownames(genes_tpc))
+  message("Genes recovered:\n", paste(gene_vector, collapse="\n"))
+
+  # Order is assumed
+  plot_data <- cbind(RNAseqData$metadata,t(genes_tpc))
+  
+  
+  # Boxplot or Heatmap
+  if (length(gene_vector)==1) {
+    library(ggplot2)
+    library(ggpubr)
+    
+    message("starting boxplot")
+    
+    p_vals <- PvalCalc(data=plot_data, facet.col=facet_by, 
+                    y.col=gene_vector, x.col=group_by,
+                    stat_test=stat_test, p_correction = p_correction)
+    
+    p <- ggplot(data = plot_data, mapping = aes(x=.data[[group_by]], 
+                                           y=.data[[gene_vector]],
+                                           fill=.data[[group_by]])) +
+      geom_boxplot() +
+      geom_jitter(width = 0.2,shape = 20) +
+      labs(title=plot_title, caption=paste("Test used:", stat_test,
+                                           "\nCorrection:", p_correction)) +
+      facet_wrap(~ .data[[facet_by]]) +
+      theme_minimal() +
+      theme(plot.caption=element_text(colour="grey30", size=10, hjust = 1)) +
+      stat_pvalue_manual(p_vals,
+                        label = "p.adj",
+                        tip.length = 0.01)
+
+  } else {
+    library(ComplexHeatmap)
+    library(circlize)
+    
+    message("starting heatmap")
+
+    p <- create_expression_heatmap(
+      expr_data = genes_tpc, metadata = RNAseqData$metadata,
+      annotation_columns = facet_by,
+      output_file = file.path(output_dir, paste0(file_name, ext, sep=".")),
+      title = plot_title, col_cluster = col_cluster, rank_order = row_cluster,
+      long_heatmap = T, ...
+    )
+
+  }
+  
+  print(p)
+}
