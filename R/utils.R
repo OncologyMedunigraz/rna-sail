@@ -110,3 +110,17 @@ get_required_bioc_packages <- function() {
     "org.Hs.eg.db", "biomaRt"
   )
 }
+
+
+#' Check if a series of Packages is installed
+#'
+#' @param required_pkgs vector of names of the required packages
+#' @return Prints uninstalled packages
+#' @export
+check_packages <- function(required_pkgs) {
+  for (pkg in required_pkgs) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required but not installed")
+    }
+  }
+}
