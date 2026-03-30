@@ -1,3 +1,271 @@
+#' Harmonize Deconvolution outputs
+#'
+#' For each tool it provides common labels and aggregates fine types into coarse ones whenever possible
+#'
+#' @param deconvo_output the output of the deconvolution method
+#' @param tool_name the tool name (CIBERSORTx, xCell, EPIC-BRef, EPIC-TRef, quanTIseq, MCPC)
+#'
+#' @return an harmonized data.frame
+#' @export
+#'
+harmonize_deconvolution <- function(deconvo_output, tool_name) {
+  # Arbitrarily decided to have samples as rows and cell types as cols
+  # Sample IDs are rownames
+  
+  if (grepl("CIBERSORTx", tool_name)) {
+    rownames(deconvo_output) <- deconvo_output$Mixture
+    n <- ncol(deconvo_output)
+    polished_df <- deconvo_output[ , -c(1, (n-3):n)]
+    
+    
+    colnames(polished_df)[9] <- "T.cells.regulatory"
+    # B cells = naive + memory + plasma
+    polished_df$B.cells <- polished_df$B.cells.naive + polished_df$B.cells.memory + polished_df$Plasma.cells
+    
+    # NK, Mast, Dendritic, and T.cells.CD4.memory = activated + resting
+    polished_df$NK.cells <- polished_df$NK.cells.resting + polished_df$NK.cells.activated
+    polished_df$Mast.cells <- polished_df$Mast.cells.resting + polished_df$Mast.cells.activated
+    polished_df$Dendritic.cells <- polished_df$Dendritic.cells.resting + polished_df$Dendritic.cells.activated
+    polished_df$T.cells.CD4.memory <- polished_df$T.cells.CD4.memory.resting + polished_df$T.cells.CD4.memory.activated
+    
+    
+    #CD4+ T cells = CD4.memory + CD4.naive + Tfh + Treg
+    polished_df$T.cells.CD4 <- polished_df$T.cells.CD4.memory + polished_df$T.cells.CD4.naive + 
+      polished_df$T.cells.follicular.helper + polished_df$T.cells.regulatory
+    
+    # T-cells
+    polished_df$T.cells = polished_df$T.cells.CD4 + polished_df$T.cells.CD8 + 
+      polished_df$T.cells.gamma.delta
+    
+    
+    #Lymphocytes = T.cells + B.cells + NK.cells
+    polished_df$Lymphocytes = polished_df$B.cells + polished_df$NK.cells + 
+      polished_df$T.cells
+    
+    
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+  
+  
+  if (grepl("xCell", tool_name)) {
+    polished_df <- as.data.frame(t(deconvo_output))
+    
+    new_names <- c("DC" = "Dendritic.cells",
+                   "aDC" = "Dendritic.cells.activated",
+                   "iDC" = "Dendritic.cells.immature",
+                   "cDC" = "Dendritic.cells.conventional",
+                   "pDC" = "Dendritic.cells.plasmacytoid",
+                   "B-cells" = "B.cells",
+                   "pro B-cells" = "B.cells.pro",
+                   "Class-switched memory B-cells" = "B.cells.memory.class-switched",
+                   "Memory B-cells" = "B.cells.memory",
+                   "naive B-cells" = "B.cells.naive",
+                   "NKT" = "NK.T.cells",
+                   "CD4+ memory T-cells" = "T.cells.CD4.memory",
+                   "CD4+ naive T-cells" = "T.cells.CD4.naive",
+                   "CD4+ T-cells" = "T.cells.CD4",
+                   "CD4+ Tcm" = "T.cells.CD4.central.memory",
+                   "CD4+ Tem" = "T.cells.CD4.effector.memory",
+                   "CD8+ naive T-cells" = "T.cells.CD8.naive",
+                   "CD8+ T-cells" = "T.cells.CD8",
+                   "CD8+ Tcm" = "T.cells.CD8.central.memory",
+                   "CD8+ Tem" = "T.cells.CD8.effector.memory",
+                   "Tgd cells" = "T.cells.gamma.delta",
+                   "Tregs" = "T.cells.regulatory",
+                   "ly Endothelial cells" = "Endothelial.cells.lymphatic",
+                   "mv Endothelial cells" = "Endothelial.cells.microvascular",
+                   "CLP" = "Progenitor.common.lymphoid",
+                   "CMP" = "Progenitor.common.myeloid",
+                   "GMP" = "Progenitor.granulocyte.monocyte",
+                   "HSC" = "Hematopoietic.stem.cells",
+                   "MEP" = "Progenitor.Megakaryocyte.Erythroid",
+                   "MPP" = "Progenitor.multipotent",
+                   "MSC" = "Mesenchymal.stem.cells"
+    )
+    
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+    colnames(polished_df) <- gsub(" ", ".", colnames(polished_df))
+    
+    
+    # T.cells
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8 + 
+      polished_df$T.cells.gamma.delta
+    
+    # Lymphocytes 
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells +
+      polished_df$NK.cells + polished_df$NK.T.cells
+    
+    n <- ncol(polished_df)
+    polished_df <- polished_df[ , c(sort(colnames(polished_df)[-c((n-2):n)]),
+                                    colnames(polished_df)[(n-2):n])
+    ]
+  }
+  
+  
+  if (grepl("EPIC-TRef", tool_name)) {
+    polished_df <- as.data.frame(deconvo_output$cellFractions)
+    
+    colnames(polished_df) <- c("B.cells",
+                               "Fibroblasts.cancer.associated",
+                               "T.cells.CD4",
+                               "T.cells.CD8",
+                               "Endothelial.cells",
+                               "Macrophages",
+                               "NK.cells",
+                               "Other.cells")
+    
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8
+    
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells
+    polished_df$NK.cells
+    
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+  
+  
+  if (grepl("EPIC-BRef", tool_name)) {
+    polished_df <- as.data.frame(deconvo_output$cellFractions)
+    
+    colnames(polished_df) <- c("B.cells",
+                               "T.cells.CD4",
+                               "T.cells.CD8",
+                               "Monocytes",
+                               "Neutrophils",
+                               "NK.cells",
+                               "Other.cells")
+    
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8
+    
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells
+    polished_df$NK.cells
+    
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+  
+  
+  if (grepl("quanTIseq", tool_name)) {
+    polished_df <- deconvo_output[,-1]
+    
+    new_names <- c("Tregs" = "T.cells.regulatory",
+                   "Other" = "Other.cells")
+    
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+    
+    
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8 +
+      polished_df$T.cells.regulatory
+    
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells
+    polished_df$NK.cells
+    
+    
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+  
+  
+  if (grepl("MCPC", tool_name)) {
+    polished_df <- as.data.frame(t(deconvo_output))
+    
+    new_names <- c("CD8 T cells" = "T.cells.CD8",
+                   "Cytotoxic lymphocytes" = "Lymphocytes.cytotoxic", 
+                   "Myeloid dendritic cells" = "Dendritic.cells.conventional")
+    
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+    colnames(polished_df) <- gsub(" ", ".", colnames(polished_df))
+    
+    
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+  
+  return(polished_df)
+}
+
+
+
+#' Run all human Deconvolution Tools
+#'
+#' Performs Immune Deconvolution using all the listed tools
+#'
+#' @param exprMatrix a matrix with raw TPM (not log-transformed), and gene symbols as rownames
+#' @param tools a vector of tool names to be used (all, xCell, EPIC-TRef, EPIC-BRef, quanTIseq, MCPC)
+#' @param output_dir the path where to save the results 
+#' @param experiment_name the name to give to the results
+#'
+#' @return a named list with the deconvolution output per tool
+#' @export
+#'
+#' @examples
+run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_name = NULL) {
+
+  if (max(exprMatrix) < 25) {
+    message("Warning: the expression matrix looks like log-transformed, therefore the transformation will be reversed")
+    exprMatrix <- 2^exprMatrix - 1
+  }
+  
+  results <- list()
+
+  if ("xCell" %in% tools) {
+    results[["xCell"]] <- xCell::xCellAnalysis(exprMatrix)
+  }
+  
+  if ("EPIC-TRef" %in% tools) {
+    results[["EPIC-TRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "TRef")
+  }
+  
+  if ("EPIC-BRef" %in% tools) {
+    results[["EPIC-BRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "BRef")
+  }
+  
+  if ("quanTIseq" %in% tools) {
+    results[["quanTIseq"]] <- quantiseqr::run_quantiseq(
+    expression_data = exprMatrix,
+    signature_matrix = "TIL10",
+    is_arraydata = FALSE,          # RNA-seq, not microarray
+    is_tumordata = TRUE,
+    scale_mRNA = TRUE
+  )
+  }
+
+  if ("MCPC" %in% tools) {
+    results[["MCPC"]] <- MCPcounter.estimate(expression = exprMatrix, featuresType = "HUGO_symbols")
+  }
+  
+  
+  for (name in names(results)) {
+    results[[name]] <- harmonize_deconvolution(deconvo_output = results[[name]],
+                                               tool_name = name,
+                                               output_dir = output_dir,
+                                               experiment_name = experiment_name)
+    
+    if (!is.null(output_dir)) {
+      result_with_samples <- cbind(sample = colnames(exprMatrix),
+                                   results[[name]])
+      create_output_dir(output_dir)
+      write.table(
+        result_with_samples,
+        file = file.path(output_dir, paste(experiment_name, name, "results.tsv", sep="_")),
+        sep = "\t",
+        quote = FALSE,
+        row.names = FALSE
+      )
+  }
+  
+  }
+  
+  return(results)
+}
+
+
+
 #' Run Immune Cell Deconvolution Analysis
 #'
 #' Performs immune cell deconvolution using multiple methods including mMCPcounter for mouse data.
@@ -12,12 +280,19 @@
 #' @return List containing immune cell scores and analysis results
 #' @export
 run_immune_deconvolution <- function(expr_data, metadata, condition_column, species = "mouse",
-                                   method = "mMCPcounter", output_dir, experiment_name) {
+                                   method = "all", output_dir, experiment_name) {
 
   create_output_dir(output_dir)
   message("Starting immune cell deconvolution analysis...")
 
   # Run deconvolution based on method
+  if (species == "human") {
+    imd_results <- run_tools(exprMatrix = expr_data, 
+                             tools = method, 
+                             output_dir = output_dir, 
+                             experiment_name = experiment_name)
+  }
+  
   if (method == "mMCPcounter" || method == "all") {
     if (species == "mouse") {
       mmc_results <- run_mmcpcounter_analysis(expr_data, metadata, condition_column,
