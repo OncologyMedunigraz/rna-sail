@@ -186,7 +186,7 @@ harmonize_deconvolution <- function(deconvo_output, tool_name) {
     polished_df <- polished_df[ , sort(colnames(polished_df))]
   }
   
-  return(polished_df)
+  return(as.data.frame(t(polished_df)))
 }
 
 
@@ -504,73 +504,217 @@ create_immune_comparison_plots <- function(immune_scores, metadata, condition_co
 #' @param experiment_name Experiment name
 #' @return ggplot object
 #' @keywords internal
-create_immune_boxplots <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
-
+create_immune_boxplots <- function(immune_scores, metadata, condition_column, output_dir, experiment_name,
+                                   scale = TRUE) {
+  
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
-      !requireNamespace("tidyr", quietly = TRUE) ||
-      !requireNamespace("ggpubr", quietly = TRUE)) {
+      !requireNamespace("tidyr",   quietly = TRUE) ||
+      !requireNamespace("dplyr",   quietly = TRUE) ||
+      !requireNamespace("ggpubr",  quietly = TRUE)) {
     message("Skipping immune boxplots - required packages not available")
     return()
   }
-
-  # Prepare data
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
-
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
-
-  # Add condition to immune data
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
-
-  # Convert to long format
-  immune_long <- tidyr::pivot_longer(
-    immune_df_matched,
-    cols = -c("Sample", all_of(condition_column)),
-    names_to = "Cell_type",
-    values_to = "Score"
+  
+  # ── 1. Combine all tools into one long data frame ──────────────────────────
+  immune_long <- lapply(names(immune_scores), function(tool) {
+    
+    mat <- immune_scores[[tool]]
+    
+    # Samples on rows
+    df <- as.data.frame(t(mat))
+    df$Sample <- gsub("^X", "", rownames(df))
+    
+    # Match & attach condition
+    df <- df[df$Sample %in% metadata$SampleID, ]
+    df[[condition_column]] <- metadata[[condition_column]][
+      match(df$Sample, metadata$SampleID)
+    ]
+    df <- df[!is.na(df[[condition_column]]), ]
+    
+    # Long format
+    long <- tidyr::pivot_longer(
+      df,
+      cols      = -c("Sample", all_of(condition_column)),
+      names_to  = "Cell_type",
+      values_to = "Score"
+    )
+    long$Tool <- tool
+    long
+    
+  }) |> dplyr::bind_rows()
+  
+  
+  # ── 1b. Per-tool per-cell-type min-max normalisation (plot only) ───────────
+  if (scale) {
+    immune_long <- immune_long |>
+      dplyr::group_by(Tool, Cell_type) |>
+      dplyr::mutate(
+        Score_raw  = Score,                         # keep raw for Wilcoxon
+        tool_min   = min(Score, na.rm = TRUE),
+        tool_max   = max(Score, na.rm = TRUE),
+        Score      = dplyr::if_else(                # avoid 0/0 when tool is flat
+          tool_max == tool_min, 0,
+          (Score - tool_min) / (tool_max - tool_min)
+        )
+      ) |>
+      dplyr::ungroup() |>
+      dplyr::select(-tool_min, -tool_max)
+    
+  }
+  
+  
+  # ── 2. Build an x-axis that groups tools within each cell-type facet ───────
+  # x = "Tool\nCondition" so bars read:  ToolA-Cond1 | ToolA-Cond2 | ToolB-Cond1 ...
+  immune_long <- immune_long |>
+    dplyr::mutate(
+      x_group = factor(
+        paste0(Tool, "\n", .data[[condition_column]]),
+        levels = unique(paste0(
+          rep(names(immune_scores), each = length(unique(.data[[condition_column]]))),
+          "\n",
+          rep(sort(unique(.data[[condition_column]])), times = length(names(immune_scores)))
+        ))
+      ),
+      Tool      = factor(Tool, levels = names(immune_scores)),
+      Condition = .data[[condition_column]]
+    )
+  
+  n_tools      <- length(names(immune_scores))
+  n_conditions <- length(unique(immune_long$Condition))
+  
+  # Colour palette: one shade per condition, repeated across tools
+  cond_colours <- setNames(
+    RColorBrewer::brewer.pal(max(3, n_conditions), "Set1")[seq_len(n_conditions)],
+    sort(unique(immune_long$Condition))
   )
-
-  # Create plot
-  p <- ggplot2::ggplot(immune_long, ggplot2::aes_string(x = condition_column, y = "Score",
-                                                        fill = condition_column)) +
+  fill_values <- cond_colours[gsub(".*\n", "", levels(immune_long$x_group))]
+  
+  # ── 3. Build comparison pairs for ggpubr (one pair per tool) ───────────────
+  #   Only generated for exactly 2 conditions; extend here for >2 if needed.
+  comparison_pairs <- if (n_conditions == 2) {
+    conds <- sort(unique(immune_long$Condition))
+    lapply(names(immune_scores), function(tool) {
+      c(paste0(tool, "\n", conds[1]),
+        paste0(tool, "\n", conds[2]))
+    })
+  } else {
+    NULL
+  }
+  
+  # ── 4. Vertical separator positions between tools ──────────────────────────
+  # Draw a dashed line after every n_conditions x-groups except the last tool
+  sep_positions <- if (n_tools > 1) {
+    seq(n_conditions + 0.5, (n_tools - 1) * n_conditions + 0.5, by = n_conditions)
+  } else {
+    NULL
+  }
+  
+  # ── 5. Build the plot ──────────────────────────────────────────────────────
+  p <- ggplot2::ggplot(
+    immune_long,
+    ggplot2::aes(x = x_group, y = Score, fill = Condition)
+  ) +
     ggplot2::geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
-    ggplot2::geom_jitter(width = 0.2, size = 0.7, alpha = 0.6) +
+    ggplot2::geom_jitter(width = 0.15, size = 0.5, alpha = 0.5) +
+    ggplot2::scale_fill_manual(values = cond_colours) +
     ggplot2::facet_wrap(~ Cell_type, scales = "free_y", ncol = 3) +
-    ggplot2::scale_fill_brewer(type = "qual", palette = "Set1") +
-    ggplot2::theme_bw(base_size = 12) +
+    ggplot2::theme_bw(base_size = 13) +
     ggplot2::theme(
-      legend.position = "bottom",
-      strip.background = ggplot2::element_rect(fill = "grey90", color = NA),
-      strip.text = ggplot2::element_text(face = "bold"),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+      # --- existing ---
+      legend.position    = "bottom",
+      strip.background   = ggplot2::element_rect(fill = "grey90", color = NA),
+      panel.grid.major.x = ggplot2::element_blank(),
+      
+      # --- text sizes ---
+      strip.text         = ggplot2::element_text(face = "bold", size = 30),  # facet titles
+      axis.text.x        = ggplot2::element_text(angle = 45, hjust = 1, size = 25),
+      axis.text.y        = ggplot2::element_text(size = 20),                 # y tick labels
+      axis.title.y       = ggplot2::element_text(size = 23),
+      plot.title         = ggplot2::element_text(size = 45, face = "bold", hjust = 0.5),
+      plot.subtitle      = ggplot2::element_text(size = 27, colour = "grey40", hjust = 0.5),
+      
+      # --- legend ---
+      legend.title       = ggplot2::element_text(size = 26, face = "bold"),
+      legend.text        = ggplot2::element_text(size = 24),
+      legend.key.size    = ggplot2::unit(2, "cm")                          # colour box size
     ) +
     ggplot2::labs(
-      title = "Immune Cell Abundances by Condition",
-      x = NULL,
-      y = "Immune Score",
-      fill = condition_column
+      title = "Immune Cell Abundances by Condition and Tool",
+      subtitle = if (scale) "Scores min-max normalised per tool · Significance tested on raw scores" else NULL,
+      x     = NULL,
+      y     = if (scale) "Normalised Score (per tool)" else "Immune Score",
+      fill  = condition_column
     )
 
-  # Add statistical comparisons
-  if (length(unique(immune_long[[condition_column]])) == 2) {
-    p <- p + ggpubr::stat_compare_means(
-      method = "wilcox.test",
-      label = "p.signif",
-      hide.ns = TRUE
+  
+    # Add tool-separator lines
+  if (!is.null(sep_positions)) {
+    p <- p + ggplot2::geom_vline(
+      xintercept = sep_positions,
+      linetype   = "dashed",
+      colour     = "grey50",
+      linewidth  = 0.4
     )
   }
-
-  # Save plot
+  
+  # Add significance brackets (one Wilcoxon per tool pair)
+  if (!is.null(comparison_pairs)) {
+    p <- p + ggpubr::stat_compare_means(
+      mapping     = ggplot2::aes(y = if (scale) Score_raw else Score),   # <-- test on raw
+      comparisons = comparison_pairs,
+      method      = "wilcox.test",
+      label       = "p.signif",
+      hide.ns     = TRUE
+    )
+  }
+  
+  # ── 6. Save ────────────────────────────────────────────────────────────────
+  
+  n_cell_types <- length(unique(immune_long$Cell_type))
+  n_cols       <- 3
+  n_rows       <- ceiling(n_cell_types / n_cols)
+  
+  # Dynamic panel size (inches): wider when more tools/conditions, taller per row
+  panel_width  <- max(3, n_tools * n_conditions * 1.1)
+  panel_height <- 6.5
+  
+  plot_width   <- panel_width  * n_cols + 1      # +1 for y-axis margin
+  plot_height  <- panel_height * n_rows  + 1.5   # +1.5 for title + legend
+  
+  # ---- multi-page PDF --------------------------------------------------------
+  # Split cell types into pages of `panels_per_page` facets each
+  panels_per_page <- 9   # 3 cols × 3 rows — adjust to taste
+  
+  cell_types <- unique(immune_long$Cell_type)
+  page_chunks <- split(cell_types, ceiling(seq_along(cell_types) / panels_per_page))
+  
   output_file <- file.path(output_dir, paste0(experiment_name, "_immune_boxplots.pdf"))
-  ggplot2::ggsave(output_file, p, width = 12, height = 10)
-
-  message("Immune boxplots saved to: ", output_file)
+  
+  pdf(output_file, width = panel_width * n_cols + 1, height = panel_height * 3 + 2.5)
+  
+  for (chunk in page_chunks) {
+    
+    p_page <- p %+%                                  # reuse all layers, swap data
+      dplyr::filter(immune_long, Cell_type %in% chunk) +
+      ggplot2::facet_wrap(~ Cell_type, scales = "free_y", ncol = n_cols)
+    
+    # Reattach significance brackets filtered to this page's data
+    if (!is.null(comparison_pairs)) {
+      p_page <- p_page +
+        ggpubr::stat_compare_means(
+          comparisons = comparison_pairs,
+          method      = "wilcox.test",
+          label       = "p.signif",
+          hide.ns     = TRUE
+        )
+    }
+    
+    print(p_page)
+  }
+  
+  dev.off()
+  
+  
   return(p)
 }
 
