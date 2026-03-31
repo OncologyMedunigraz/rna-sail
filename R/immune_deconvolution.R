@@ -213,19 +213,19 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
   
   results <- list()
 
-  if ("xCell" %in% tools) {
+  if (tools == "all" || "xCell" %in% tools) {
     results[["xCell"]] <- xCell::xCellAnalysis(exprMatrix)
   }
   
-  if ("EPIC-TRef" %in% tools) {
+  if (tools == "all" || "EPIC-TRef" %in% tools) {
     results[["EPIC-TRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "TRef")
   }
   
-  if ("EPIC-BRef" %in% tools) {
+  if (tools == "all" || "EPIC-BRef" %in% tools) {
     results[["EPIC-BRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "BRef")
   }
   
-  if ("quanTIseq" %in% tools) {
+  if (tools == "all" || "quanTIseq" %in% tools) {
     results[["quanTIseq"]] <- quantiseqr::run_quantiseq(
     expression_data = exprMatrix,
     signature_matrix = "TIL10",
@@ -235,7 +235,7 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
   )
   }
 
-  if ("MCPC" %in% tools) {
+  if (tools == "all" || "MCPC" %in% tools) {
     results[["MCPC"]] <- MCPcounter.estimate(expression = exprMatrix, featuresType = "HUGO_symbols")
   }
   
@@ -252,7 +252,7 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
       create_output_dir(output_dir)
       write.table(
         result_with_samples,
-        file = file.path(output_dir, paste(experiment_name, name, "results.tsv", sep="_")),
+        file = file.path(output_dir, paste(experiment_name, name, "scores.tsv", sep="_")),
         sep = "\t",
         quote = FALSE,
         row.names = FALSE
