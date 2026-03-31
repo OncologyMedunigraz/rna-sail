@@ -730,91 +730,101 @@ create_immune_boxplots <- function(immune_scores, metadata, condition_column, ou
 #' @return None (creates plot)
 #' @keywords internal
 create_immune_heatmap <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
-
+  
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
       !requireNamespace("circlize", quietly = TRUE)) {
     message("Skipping immune heatmap - ComplexHeatmap not available")
     return(invisible(NULL))
   }
-
-  # ----------------------------
-  # 1. Clean & preprocess data
-  # ----------------------------
-
-  # Remove zero-variance rows before scaling
-  row_sds <- apply(immune_scores, 1, sd, na.rm = TRUE)
-  immune_scores <- immune_scores[row_sds > 0, , drop = FALSE]
-
-  if (nrow(immune_scores) == 0) {
-    message("No rows with non-zero variance. Skipping heatmap.")
-    return(invisible(NULL))
+  
+  for (tool_name in names(immune_scores)) {
+    
+    message("Creating heatmap for ", tool_name, " output")
+    
+    immune_df <- immune_scores[[tool_name]]
+    
+    # ----------------------------
+    # 1. Clean & preprocess data
+    # ----------------------------
+    
+    # Remove zero-variance rows before scaling
+    row_sds <- apply(immune_df, 1, sd, na.rm = TRUE)
+    immune_df <- immune_df[row_sds > 0, , drop = FALSE]
+    
+    if (nrow(immune_df) == 0) {
+      message("No rows with non-zero variance. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+    
+    
+    # Z-score scaling by row
+    immune_scaled <- t(scale(t(immune_df)))
+    
+    # Clean sample names (e.g. X prefixes from R)
+    colnames(immune_scaled) <- gsub("^X", "", colnames(immune_scaled))
+    
+    # Remove rows or columns with any NA/NaN/Inf after scaling
+    immune_scaled <- immune_scaled[complete.cases(immune_scaled), , drop = FALSE]
+    immune_scaled <- immune_scaled[, apply(immune_scaled, 2, function(x) all(is.finite(x))), drop = FALSE]
+    
+    if (nrow(immune_scaled) == 0 || ncol(immune_scaled) == 0) {
+      message("Matrix is empty after cleaning. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+    
+    # ----------------------------
+    # 2. Match metadata and samples
+    # ----------------------------
+    common_samples <- base::intersect(colnames(immune_scaled), metadata$SampleID)
+    
+    if (length(common_samples) == 0) {
+      message("No matching samples between immune_scores and metadata. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+    
+    immune_scaled <- immune_scaled[, common_samples, drop = FALSE]
+    metadata_ordered <- metadata[match(common_samples, metadata$SampleID), ]
+    
+    # ----------------------------
+    # 3. Column annotation (conditions)
+    # ----------------------------
+    unique_conditions <- unique(metadata_ordered[[condition_column]])
+    n_conditions <- length(unique_conditions)
+    palette <- RColorBrewer::brewer.pal(max(3, n_conditions), "Set1")[1:n_conditions]
+    names(palette) <- unique_conditions
+    
+    ha <- ComplexHeatmap::HeatmapAnnotation(
+      Condition = metadata_ordered[[condition_column]],
+      col = list(Condition = palette)
+    )
+    
+    # ----------------------------
+    # 4. Create and save heatmap
+    # ----------------------------
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name,"immune_heatmap.pdf", sep="_"))
+    
+    pdf(output_file, width = ncol(immune_scaled) * 0.3 + 1.5, height = nrow(immune_scaled) * 0.18 + 1.8)
+    ht <- ComplexHeatmap::Heatmap(
+      immune_scaled,
+      name = "Immune Score\n(Z-score)",
+      col = circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
+      top_annotation = ha,
+      show_row_names = TRUE,
+      show_column_names = TRUE,
+      cluster_rows = TRUE,
+      cluster_columns = TRUE,
+      row_names_side = "left",
+      column_title = "Immune Cell Abundances"
+    )
+    draw(ht)
+    dev.off()
+    
+    message("Immune heatmap saved to: ", output_file)
+    invisible(output_file)
+    
   }
-
-  # Z-score scaling by row
-  immune_scaled <- t(scale(t(immune_scores)))
-
-  # Clean sample names (e.g. X prefixes from R)
-  colnames(immune_scaled) <- gsub("^X", "", colnames(immune_scaled))
-
-  # Remove rows or columns with any NA/NaN/Inf after scaling
-  immune_scaled <- immune_scaled[complete.cases(immune_scaled), , drop = FALSE]
-  immune_scaled <- immune_scaled[, apply(immune_scaled, 2, function(x) all(is.finite(x))), drop = FALSE]
-
-  if (nrow(immune_scaled) == 0 || ncol(immune_scaled) == 0) {
-    message("Matrix is empty after cleaning. Skipping heatmap.")
-    return(invisible(NULL))
-  }
-
-  # ----------------------------
-  # 2. Match metadata and samples
-  # ----------------------------
-  common_samples <- intersect(colnames(immune_scaled), metadata$SampleID)
-
-  if (length(common_samples) == 0) {
-    message("No matching samples between immune_scores and metadata. Skipping heatmap.")
-    return(invisible(NULL))
-  }
-
-  immune_scaled <- immune_scaled[, common_samples, drop = FALSE]
-  metadata_ordered <- metadata[match(common_samples, metadata$SampleID), ]
-
-  # ----------------------------
-  # 3. Column annotation (conditions)
-  # ----------------------------
-  unique_conditions <- unique(metadata_ordered[[condition_column]])
-  n_conditions <- length(unique_conditions)
-  palette <- RColorBrewer::brewer.pal(max(3, n_conditions), "Set1")[1:n_conditions]
-  names(palette) <- unique_conditions
-
-  ha <- ComplexHeatmap::HeatmapAnnotation(
-    Condition = metadata_ordered[[condition_column]],
-    col = list(Condition = palette)
-  )
-
-  # ----------------------------
-  # 4. Create and save heatmap
-  # ----------------------------
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_heatmap.pdf"))
-
-  pdf(output_file, width = 10, height = 8)
-  ht <- ComplexHeatmap::Heatmap(
-    immune_scaled,
-    name = "Immune Score\n(Z-score)",
-    col = circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
-    top_annotation = ha,
-    show_row_names = TRUE,
-    show_column_names = TRUE,
-    cluster_rows = TRUE,
-    cluster_columns = TRUE,
-    row_names_side = "left",
-    column_title = "Immune Cell Abundances"
-  )
-  draw(ht)
-  dev.off()
-
-  message("Immune heatmap saved to: ", output_file)
-  invisible(output_file)
 }
+
 
 #' Create Immune Radar Plot
 #'
