@@ -331,7 +331,7 @@ run_immune_deconvolution <- function(expr_data, metadata, condition_column, spec
 #'
 #' Compares immune cell abundances between conditions and returns a table of p-values.
 #'
-#' @param immune_scores Immune scores matrix (cell types x samples)
+#' @param immune_scores named list with Immune scores matrices (cell types x samples) per tool
 #' @param metadata Sample metadata
 #' @param condition_column Column name for condition comparison
 #' @param output_dir Output directory
@@ -340,58 +340,68 @@ run_immune_deconvolution <- function(expr_data, metadata, condition_column, spec
 #' @keywords internal
 perform_immune_statistical_analysis <- function(immune_scores, metadata, condition_column,
                                                 output_dir, experiment_name) {
-
+  
   if (!requireNamespace("dplyr", quietly = TRUE)) stop("Package 'dplyr' is required")
   if (!requireNamespace("tidyr", quietly = TRUE)) stop("Package 'tidyr' is required")
-
-  # Transpose immune_scores to samples x cell types
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
-
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
-
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
-
-  cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
-
-  results <- lapply(cell_types, function(cell) {
-    scores <- immune_df_matched[[cell]]
-    condition <- immune_df_matched[[condition_column]]
-    n_groups <- length(unique(condition))
-
-    if (n_groups == 2) {
-      test <- "wilcox.test"
-      test_res <- wilcox.test(scores ~ condition)
-      p_val <- test_res$p.value
-    } else {
-      test <- "kruskal.test"
-      test_res <- kruskal.test(scores ~ condition)
-      p_val <- test_res$p.value
-    }
-
-    data.frame(
-      Cell_type = cell,
-      Test = test,
-      P_value = p_val
-    )
-  })
-
-  results_df <- dplyr::bind_rows(results)
-  results_df$Adj_P_value <- p.adjust(results_df$P_value, method = "BH")
-
-  # Save results
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_stats.tsv"))
-  write.table(results_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE)
-
-  message("Immune statistical analysis saved to: ", output_file)
-
-  return(results_df)
+  
+  results_list <- list()
+  
+  for (tool_name in names(immune_scores)) {
+    
+    immune_df <- immune_scores[[tool_name]]
+    
+    # Transpose immune_scores to samples x cell types
+    immune_df <- as.data.frame(t(immune_df))
+    immune_df$Sample <- gsub("^X", "", rownames(immune_df))
+    
+    # Match metadata
+    sample_order <- match(immune_df$Sample, metadata$SampleID)
+    metadata_ordered <- metadata[sample_order, ]
+    metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
+    
+    immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
+    immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
+      match(immune_df_matched$Sample, metadata_ordered$SampleID)
+    ]
+    
+    cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
+    
+    results <- lapply(cell_types, function(cell) {
+      scores <- immune_df_matched[[cell]]
+      condition <- immune_df_matched[[condition_column]]
+      n_groups <- length(unique(condition))
+      
+      if (n_groups == 2) {
+        test <- "wilcox.test"
+        test_res <- wilcox.test(scores ~ condition)
+        p_val <- test_res$p.value
+      } else {
+        test <- "kruskal.test"
+        test_res <- kruskal.test(scores ~ condition)
+        p_val <- test_res$p.value
+      }
+      
+      data.frame(
+        Cell_type = cell,
+        Test = test,
+        P_value = p_val
+      )
+    })
+    
+    results_df <- dplyr::bind_rows(results)
+    results_df$Adj_P_value <- p.adjust(results_df$P_value, method = "BH")
+    
+    # Save results
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name, "immune_stats.tsv", sep="_"))
+    write.table(results_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE)
+    
+    message("Immune statistical analysis saved to: ", output_file)
+    
+    
+    results_list[[name]] <- results_df
+  }
+  
+  return(results_list)
 }
 
 
@@ -470,7 +480,7 @@ match_metadata_to_expression_immune <- function(immune_df, metadata, sample_id_c
 #'
 #' Creates comprehensive visualization plots for immune cell deconvolution results.
 #'
-#' @param immune_scores Immune cell scores matrix (cell types x samples)
+#' @param immune_scores named list with Immune cell scores matrices (cell types x samples) per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
@@ -497,7 +507,7 @@ create_immune_comparison_plots <- function(immune_scores, metadata, condition_co
 #'
 #' Creates boxplots comparing immune cell abundances between conditions.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune scores matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
@@ -722,7 +732,7 @@ create_immune_boxplots <- function(immune_scores, metadata, condition_column, ou
 #'
 #' Creates a heatmap showing immune cell abundances across samples.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune score matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
@@ -830,7 +840,7 @@ create_immune_heatmap <- function(immune_scores, metadata, condition_column, out
 #'
 #' Creates radar plots showing immune cell profiles for different conditions.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune scores matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
