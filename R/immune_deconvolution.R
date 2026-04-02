@@ -848,79 +848,86 @@ create_immune_heatmap <- function(immune_scores, metadata, condition_column, out
 #' @return None (creates plot)
 #' @keywords internal
 create_immune_radar_plot <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
-
+  
   if (!requireNamespace("fmsb", quietly = TRUE)) {
     message("Skipping radar plot - fmsb package not available")
     return()
   }
-
-  # Prepare data
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
-
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
-
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
-
-  # Calculate means for each condition
-  conditions <- unique(immune_df_matched[[condition_column]])
-  cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
-
-  radar_data <- data.frame(row.names = cell_types)
-
-  for (condition in conditions) {
-    condition_data <- immune_df_matched[immune_df_matched[[condition_column]] == condition, cell_types, drop = FALSE]
-    radar_data[[condition]] <- colMeans(condition_data, na.rm = TRUE)
-  }
-
-  # fmsb requires max and min rows
-  radar_data <- rbind(
-    max = apply(radar_data, 1, max, na.rm = TRUE),
-    min = apply(radar_data, 1, min, na.rm = TRUE),
-    radar_data
-  )
-
-
-  radar_data_t <- t(radar_data[-c(1,2), ])  # remove max/min rows, transpose
-  colnames(radar_data_t) <- rownames(radar_data)[-c(1,2)]  # set column names to cell types
-
-  # Add max and min rows as first two rows
-  radar_data_ready <- rbind(
-    max = apply(radar_data_t, 2, max, na.rm = TRUE),
-    min = apply(radar_data_t, 2, min, na.rm = TRUE),
-    radar_data_t
-  )
-  radar_data_ready<-as.data.frame(radar_data_ready)
-  # Plot
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_radar_plot.pdf"))
-  pdf(output_file, width = 8, height = 8)
-
-
-  # Plot
-  fmsb::radarchart(
-    radar_data_ready,
-    axistype = 1,
-    pcol = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
-    pfcol = scales::alpha(RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"), 0.4),
-    plwd = 2,
-    cglcol = "grey",
-    cglty = 1,
-    axislabcol = "grey30",
-    caxislabels = seq(0, max(radar_data_ready[1, ]), length.out = 5),
-    cglwd = 0.8,
-    vlcex = 0.8
-  )
-
-  legend("topright", legend = rownames(radar_data_ready)[-c(1,2)],
-         col = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
-         lty = 1, lwd = 2, bty = "n")
-  dev.off()
-
-  message("Immune radar plot saved to: ", output_file)
+  
+  
+  for (tool_name in names(immune_scores)) {
+    
+    message("Creating radar plot for ", tool_name, " output")
+    
+    # Prepare data
+    immune_df <- as.data.frame(t(immune_scores[[tool_name]]))
+    immune_df$Sample <- gsub("^X", "", rownames(immune_df))
+    
+    # Match metadata
+    sample_order <- match(immune_df$Sample, metadata$SampleID)
+    metadata_ordered <- metadata[sample_order, ]
+    metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
+    
+    immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
+    immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
+      match(immune_df_matched$Sample, metadata_ordered$SampleID)
+    ]
+    
+    # Calculate means for each condition
+    conditions <- unique(immune_df_matched[[condition_column]])
+    cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
+    
+    radar_data <- data.frame(row.names = cell_types)
+    
+    for (condition in conditions) {
+      condition_data <- immune_df_matched[immune_df_matched[[condition_column]] == condition, cell_types, drop = FALSE]
+      radar_data[[condition]] <- colMeans(condition_data, na.rm = TRUE)
+    }
+    
+    # fmsb requires max and min rows
+    radar_data <- rbind(
+      max = apply(radar_data, 1, max, na.rm = TRUE),
+      min = apply(radar_data, 1, min, na.rm = TRUE),
+      radar_data
+    )
+    
+    
+    radar_data_t <- t(radar_data[-c(1,2), ])  # remove max/min rows, transpose
+    colnames(radar_data_t) <- rownames(radar_data)[-c(1,2)]  # set column names to cell types
+    
+    # Add max and min rows as first two rows
+    radar_data_ready <- rbind(
+      max = apply(radar_data_t, 2, max, na.rm = TRUE),
+      min = apply(radar_data_t, 2, min, na.rm = TRUE),
+      radar_data_t
+    )
+    radar_data_ready<-as.data.frame(radar_data_ready)
+    # Plot
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name, 
+                                               "immune_radar_plot.pdf", sep="_"))
+    pdf(output_file, width = 8, height = 8)
+    
+    
+    # Plot
+    fmsb::radarchart(
+      radar_data_ready,
+      axistype = 1,
+      pcol = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
+      pfcol = scales::alpha(RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"), 0.4),
+      plwd = 2,
+      cglcol = "grey",
+      cglty = 1,
+      axislabcol = "grey30",
+      caxislabels = seq(0, max(radar_data_ready[1, ]), length.out = 5),
+      cglwd = 0.8,
+      vlcex = 0.8
+    )
+    
+    legend("topright", legend = rownames(radar_data_ready)[-c(1,2)],
+           col = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
+           lty = 1, lwd = 2, bty = "n")
+    dev.off()
+    
+    message("Immune radar plot saved to: ", output_file)                            
+  } 
 }
