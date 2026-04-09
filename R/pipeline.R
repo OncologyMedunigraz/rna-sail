@@ -204,6 +204,8 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   gsea_gene_ranks <- attr(gsea_results, "gene_ranks")
   print(gsea_gene_sets)
   print(gsea_gene_ranks)
+
+  
   # Create GSEA visualizations
   plot_gsea_barplot(
     gsea_results,
