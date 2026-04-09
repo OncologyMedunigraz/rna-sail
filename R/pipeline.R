@@ -99,12 +99,6 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   )
   # ========== 2. Exploratory Data Analysis ==========
   message("\nStep 2: Exploratory data analysis...")
-  # Define shared color mapping
-  conditions <- unique(metadata_matched$condition)
-  n_conditions <- length(conditions)
-
-  condition_colors <- get_palette(n_conditions = n_conditions, 
-                                  val_conditions = conditions)
   
   # PCA plot
   pca_result <- create_pca_plot(
@@ -112,9 +106,6 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
     color_by = condition_column,
     output_file = file.path(output_dir, paste0(experiment_name, "_PCA.pdf"))
   )
-
-  # Expression heatmap
-  color_map_list <- list(condition = condition_colors)
 
   create_expression_heatmap(
     pc_tpm_processed, metadata_matched,
