@@ -104,11 +104,18 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   n_conditions <- length(conditions)
 
   # !!! Changed way palette is taken !!!
-  pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
-  condition_colors <- setNames(
-    pal(n_conditions),
-    conditions
-  )
+  if (n_conditions <= 9) {
+    condition_colors <- setNames(
+      RColorBrewer::brewer.pal(n_conditions, "Set1"),
+      conditions
+    )
+  } else {
+    pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
+    condition_colors <- setNames(
+      pal(n_conditions),
+      conditions
+    )
+  }
   
   # PCA plot
   pca_result <- create_pca_plot(
