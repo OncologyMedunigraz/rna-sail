@@ -170,7 +170,7 @@ PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "n
 
 
 get_palette <- function(n_conditions, val_conditions) {
-  check_packages("grDevices", "RColorBrewer")
+  check_packages(c("grDevices", "RColorBrewer"))
   
   if (n_conditions <= 9) {
     color_mapping <- setNames(
