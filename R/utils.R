@@ -166,3 +166,26 @@ PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "n
   
   return(res)
 }
+
+
+
+get_palette <- function(n_conditions, val_conditions) {
+  check_packages("grDevices", "RColorBrewer")
+  
+  if (n_conditions <= 9) {
+    color_mapping <- setNames(
+      RColorBrewer::brewer.pal(n_conditions, "Set1"),
+      val_conditions
+    )
+  } else {
+    # !!! Must check grDevices is installed !!!
+    pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
+    color_mapping <- setNames(
+      pal(n_conditions),
+      val_conditions
+    )
+  }
+
+  return(color_mapping)
+
+}
