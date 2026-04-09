@@ -34,7 +34,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
                                  run_immune_analysis = TRUE, run_lincs_analysis = TRUE,
                                  lfc_threshold = 1, color_volcano_up = "#CA3433", color_volcano_down = "#2B7CB6", genes_to_label = NULL,
                                  fdr_threshold = 0.05, point_size_volcano = 4, label_size_volcano = 5, n_labels_up = 10, n_labels_down = 10,
-                                 n_gsea_enrich_up = 5, n_gsea_enrich_down = 5, ssgsea_n_boxplot_pathways = 20,
+                                 n_gsea_pathways = 30, n_gsea_enrich_up = 5, n_gsea_enrich_down = 5, ssgsea_n_boxplot_pathways = 20,
                                  color_gsea_down = "#2B7CB6", color_gsea_up = "#CA3433", color_gsea_ns = "#C5C6C7",
                                  extra_pathways_file = NULL)
   {
@@ -99,16 +99,6 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   )
   # ========== 2. Exploratory Data Analysis ==========
   message("\nStep 2: Exploratory data analysis...")
-  # Define shared color mapping
-  conditions <- unique(metadata_matched$condition)
-  n_conditions <- length(conditions)
-
-  # !!! Changed way palette is taken !!!
-  pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
-  condition_colors <- setNames(
-    pal(n_conditions),
-    conditions
-  )
   
   # PCA plot
   pca_result <- create_pca_plot(
@@ -116,9 +106,6 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
     color_by = condition_column,
     output_file = file.path(output_dir, paste0(experiment_name, "_PCA.pdf"))
   )
-
-  # Expression heatmap
-  color_map_list <- list(condition = condition_colors)
 
   create_expression_heatmap(
     pc_tpm_processed, metadata_matched,
@@ -204,9 +191,12 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   gsea_gene_ranks <- attr(gsea_results, "gene_ranks")
   print(gsea_gene_sets)
   print(gsea_gene_ranks)
+
+  
   # Create GSEA visualizations
   plot_gsea_barplot(
     gsea_results,
+    n_pathways = n_gsea_pathways,
     output_file = file.path(output_dir, paste0(experiment_name, "_GSEA_barplot.pdf")),
     color_up = color_gsea_up,
     color_down = color_gsea_down,
@@ -215,6 +205,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
 
   plot_gsea_dotplot(
     gsea_results,
+    n_pathways = n_gsea_pathways,
     output_file = file.path(output_dir, paste0(experiment_name, "_GSEA_dotplot.pdf")),
     color_up = color_gsea_up,
     color_down = color_gsea_down,
