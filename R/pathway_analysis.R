@@ -240,7 +240,7 @@ plot_gsea_enrichment <- function(
 #' @export
 plot_gsea_barplot <- function(
     gsea_results,
-    n_pathways     = 20,
+    n_pathways     = 30,
     output_file    = NULL,
     width          = 8,
     height         = 6,
