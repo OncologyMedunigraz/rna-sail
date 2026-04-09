@@ -174,7 +174,7 @@ get_palette <- function(n_conditions, val_conditions) {
   
   if (n_conditions <= 9) {
     color_mapping <- setNames(
-      RColorBrewer::brewer.pal(n_conditions, "Set1"),
+      RColorBrewer::brewer.pal(9, "Set1")[1:n_conditions],
       val_conditions
     )
   } else {
