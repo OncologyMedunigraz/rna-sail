@@ -356,8 +356,8 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
               col_list[[col]] <- color_mapping[[col]]
           } else if (is.factor(unique_vals) || is.character(unique_vals)) {
 
-              col_list <- get_palette(n_conditions = length(unique_vals), 
-                                  val_conditions = unique_vals)
+              col_list[[col]] <- get_palette(n_conditions = length(unique_vals),
+                                             val_conditions = unique_vals)
           }
       }
       
