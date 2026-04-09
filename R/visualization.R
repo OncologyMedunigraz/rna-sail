@@ -255,11 +255,8 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
     levels_color <- unique(na.omit(metadata_matched[[color_by]]))
     n_levels <- length(levels_color)
 
-    pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9,"Set1"))
-    color_mapping <- setNames(
-        pal(n_levels),
-        levels_color
-    )
+    color_mapping <- get_palette(n_conditions = n_levels, 
+                                 val_conditions = levels_color)
   }
                        
   p <- ggplot2::ggplot(
@@ -358,11 +355,9 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
           if (!is.null(color_mapping) && !is.null(color_mapping[[col]])) {
               col_list[[col]] <- color_mapping[[col]]
           } else if (is.factor(unique_vals) || is.character(unique_vals)) {
-              # !!! Palette creation within Set1 => further colours can be interpolated !!!
-              pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
-              # !!! Must check grDevices is installed !!!
-              colors <- pal(length(unique_vals))
-              col_list[[col]] <- setNames(colors, unique_vals)
+
+              col_list[[col]] <- get_palette(n_conditions = length(unique_vals),
+                                             val_conditions = unique_vals)
           }
       }
       
