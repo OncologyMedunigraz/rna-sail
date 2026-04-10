@@ -722,4 +722,6 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
   }
   
   print(p)
+
+  return p
 }
