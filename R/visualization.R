@@ -644,7 +644,7 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
                                  file_name="Expression_heatmap_of_selected_genes", ...) {
 
   required_pkgs <- c("ggplot2", "ggpubr", "ComplexHeatmap", "circlize")
-  CheckPackages(required_pkgs)
+  check_packages(required_pkgs)
 
   RNAseqData <- results$preprocessing
   
