@@ -673,15 +673,14 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
   # Recovered genes
   genes_tpc <- RNAseqData$pc_tpm[ind, ,
                                  drop=F]
-
-  tmp <- unique(rownames(genes_tpc))
   
   # To avoid genes not found
   new.order <- sapply(gene_vector, function(x) {
-    val <- grep(x, tmp)
+    val <- grep(x, rownames(genes_tpc)
     if (length(val) == 0) NA else val})
   
-  gene_vector <- tmp[na.omit(new.order)]
+  genes_tpc <- genes_tpc[na.omit(new.order), , drop=F]
+  gene_vector <- unique(rownames(genes_tpc))
   message("Genes recovered:\n", paste(gene_vector, collapse="\n"))
 
   # Order is assumed
