@@ -676,7 +676,7 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
   
   # To avoid genes not found
   new.order <- sapply(gene_vector, function(x) {
-    val <- grep(x, rownames(genes_tpc)
+    val <- grep(x, rownames(genes_tpc))
     if (length(val) == 0) NA else val})
   
   genes_tpc <- genes_tpc[na.omit(new.order), , drop=F]
