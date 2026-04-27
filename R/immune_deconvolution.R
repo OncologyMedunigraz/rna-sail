@@ -208,6 +208,15 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
 
   message("Stripping ENSEMBL IDs from rownames")
   rownames(exprMatrix) <- sapply(rownames(exprMatrix), function(x) strsplit(x,split="_")[[1]][1])
+
+  dup_genes <- rownames(exprMatrix)[duplicated(rownames(exprMatrix))]
+
+  if (length(dup_genes)>0) {
+    message("Removing the following duplicated genes prior to deconvolution:")
+    print(as.vector(dup_genes))
+  
+    exprMatrix <- exprMatrix[!rownames(exprMatrix) %in% dup_genes,]
+  }
   
   if (max(exprMatrix) < 25) {
     message("Warning: the expression matrix looks like log-transformed, therefore the transformation will be reversed")
