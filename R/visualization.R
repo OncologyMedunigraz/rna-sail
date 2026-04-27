@@ -322,7 +322,8 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
 create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n_genes = 500,
                                       scale_data = TRUE, color_mapping = NULL,
                                       output_file = NULL, min.width = 5, height = 8,
-                                      title = NULL, col_cluster = TRUE, rank_order = TRUE,
+                                      title = NULL, col_cluster = TRUE, row_cluster = TRUE, 
+                                      rank_order = TRUE,
                                       long_heatmap = FALSE) {
     
   message("starting heatmap ")
@@ -396,7 +397,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
           row_names_side = "left",
           row_names_gp = grid::gpar(fontsize = 10),
           show_column_names = TRUE,
-          cluster_rows = TRUE,
+          cluster_rows = row_cluster,
           cluster_columns = col_cluster,
           column_title = if (!is.null(title)) title else paste("Expression Heatmap -", n_genes, "Most Variable Genes"),
           heatmap_legend_param = list(direction = "vertical")
@@ -644,7 +645,7 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
                                  file_name="Expression_heatmap_of_selected_genes", ...) {
 
   required_pkgs <- c("ggplot2", "ggpubr", "ComplexHeatmap", "circlize")
-  CheckPackages(required_pkgs)
+  check_packages(required_pkgs)
 
   RNAseqData <- results$preprocessing
   
@@ -672,7 +673,13 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
   # Recovered genes
   genes_tpc <- RNAseqData$pc_tpm[ind, ,
                                  drop=F]
-
+  
+  # To avoid genes not found
+  new.order <- sapply(gene_vector, function(x) {
+    val <- grep(x, rownames(genes_tpc))
+    if (length(val) == 0) NA else val})
+  
+  genes_tpc <- genes_tpc[na.omit(new.order), , drop=F]
   gene_vector <- unique(rownames(genes_tpc))
   message("Genes recovered:\n", paste(gene_vector, collapse="\n"))
 
@@ -714,12 +721,14 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
     p <- create_expression_heatmap(
       expr_data = genes_tpc, metadata = RNAseqData$metadata,
       annotation_columns = facet_by,
-      output_file = file.path(output_dir, paste0(file_name, ext, sep=".")),
-      title = plot_title, col_cluster = col_cluster, rank_order = row_cluster,
+      output_file = file.path(output_dir, paste(file_name, ext, sep=".")),
+      title = plot_title, rank_order = F, col_cluster = col_cluster, row_cluster = row_cluster,
       long_heatmap = T, ...
     )
 
   }
   
   print(p)
+
+  return(p)
 }

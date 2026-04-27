@@ -220,7 +220,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
 
   plot_gsea_enrichment(
     gsea_results,
-    pathways    = extra_pathways,   # NULL ⇒ auto top up/down
+    pathways    = NULL,   # NULL ⇒ auto top up/down
     n_up        = n_gsea_enrich_up,
     n_down      = n_gsea_enrich_down,
     output_file = file.path(output_dir, paste0(experiment_name, "_GSEA_enrichment.pdf")),

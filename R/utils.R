@@ -139,7 +139,7 @@ check_packages <- function(required_pkgs) {
 #' @export
 PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "none") {
   
-  CheckPackages(c("dplyr", "ggpubr"))
+  check_packages(c("dplyr", "ggpubr"))
   
   comps <- combn(levels(factor(data[[x.col]])), m = 2, simplify = FALSE)
   
