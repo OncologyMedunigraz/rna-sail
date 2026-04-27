@@ -206,6 +206,9 @@ harmonize_deconvolution <- function(deconvo_output, tool_name) {
 #' @examples
 run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_name = NULL) {
 
+  message("Stripping ENSEMBL IDs from rownames")
+  rownames(exprMatrix) <- sapply(rownames(exprMatrix), function(x) strsplit(x,split="_")[[1]][1])
+  
   if (max(exprMatrix) < 25) {
     message("Warning: the expression matrix looks like log-transformed, therefore the transformation will be reversed")
     exprMatrix <- 2^exprMatrix - 1
