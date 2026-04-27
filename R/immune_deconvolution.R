@@ -221,11 +221,13 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
   }
   
   if (tools == "all" || "EPIC-TRef" %in% tools) {
-    results[["EPIC-TRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "TRef")
+    library(EPIC)
+    results[["EPIC-TRef"]] <- EPIC(bulk = exprMatrix, reference = "TRef")
   }
   
   if (tools == "all" || "EPIC-BRef" %in% tools) {
-    results[["EPIC-BRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "BRef")
+    library(EPIC) #EPIC:: notation doesn't work
+    results[["EPIC-BRef"]] <- EPIC(bulk = exprMatrix, reference = "BRef")
   }
   
   if (tools == "all" || "quanTIseq" %in% tools) {
