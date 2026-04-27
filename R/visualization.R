@@ -720,7 +720,7 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
 
     p <- create_expression_heatmap(
       expr_data = genes_tpc, metadata = RNAseqData$metadata,
-      annotation_columns = c(group_by, facet_by),
+      annotation_columns = facet_by,
       output_file = file.path(output_dir, paste(file_name, ext, sep=".")),
       title = plot_title, rank_order = F, col_cluster = col_cluster, row_cluster = row_cluster,
       long_heatmap = T, ...
