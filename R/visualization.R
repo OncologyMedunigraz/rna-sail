@@ -626,6 +626,7 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
 #' @param facet_by name of the column whose values will correspond to a single plot
 #' @param remove_samples names of the samples to remove
 #' @param species either "human" or "mouse" (default: "human")
+#' @param remove_id whether to remove gene ID in the heatmap (default: TRUE)
 #' @param stat_test what test to use in the boxplot (default: "wilcox.test")
 #' @param p_correction what p-val correction to use in the boxplot (default: "fdr")
 #' @param col_cluster bool to cluster columns (default: TRUE)
@@ -639,7 +640,7 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
 #' @export
 plot_gene_expression <- function(results, gene_vector, output_dir,
                                  group_by="cell_line", facet_by="condition",
-                                 remove_samples=NULL, species = "human",
+                                 remove_samples=NULL, species = "human", remove_id = TRUE,
                                  stat_test="wilcox.test", p_correction="fdr",
                                  col_cluster=TRUE, row_cluster=TRUE, plot_title=NULL, ext="pdf", 
                                  file_name="Expression_heatmap_of_selected_genes", ...) {
@@ -682,7 +683,9 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
   genes_tpc <- genes_tpc[na.omit(new.order), , drop=F]
   gene_vector <- unique(rownames(genes_tpc))
   message("Genes recovered:\n", paste(gene_vector, collapse="\n"))
-
+  
+  if (remove_id) rownames(genes_tpc) <- sub("_.*", "", rownames(genes_tpc))
+    
   # Order is assumed
   plot_data <- cbind(RNAseqData$metadata,t(genes_tpc))
   

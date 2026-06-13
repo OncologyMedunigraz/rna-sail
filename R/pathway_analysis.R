@@ -247,7 +247,8 @@ plot_gsea_barplot <- function(
     padj_threshold = 0.05,
     color_up       = "#E31A1C",
     color_down     = "#1F78B4",
-    color_ns       = "grey70"
+    color_ns       = "grey70",
+    plot_title     = "GSEA Results - Top Enriched Pathways"
 ) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -288,7 +289,7 @@ plot_gsea_barplot <- function(
     ) +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::labs(
-      title = "GSEA Results - Top Enriched Pathways",
+      title = plot_title,
       x     = "Pathway",
       y     = "Normalized Enrichment Score (NES)"
     ) +
@@ -327,7 +328,8 @@ plot_gsea_dotplot <- function(
     padj_threshold = 0.05,
     color_up       = "#E31A1C",
     color_down     = "#1F78B4",
-    color_ns       = "grey70"
+    color_ns       = "grey70",
+    plot_title     = "GSEA Results - Pathway Enrichment"
 ) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -372,7 +374,7 @@ plot_gsea_dotplot <- function(
     ggplot2::scale_size_continuous(name = "Gene set size", range = c(2, 8)) +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::labs(
-      title = "GSEA Results - Pathway Enrichment",
+      title = plot_title,
       x     = "Normalized Enrichment Score (NES)",
       y     = NULL
     ) +
