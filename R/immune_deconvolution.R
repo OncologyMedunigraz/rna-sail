@@ -205,16 +205,16 @@ harmonize_deconvolution <- function(deconvo_output, tool_name) {
 #'
 #' @examples
 run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_name = NULL) {
-
+  
   message("Stripping ENSEMBL IDs from rownames")
   rownames(exprMatrix) <- sapply(rownames(exprMatrix), function(x) strsplit(x,split="_")[[1]][1])
-
+  
   dup_genes <- rownames(exprMatrix)[duplicated(rownames(exprMatrix))]
-
+  
   if (length(dup_genes)>0) {
     message("Removing the following duplicated genes prior to deconvolution:")
     print(as.vector(dup_genes))
-  
+    
     exprMatrix <- exprMatrix[!rownames(exprMatrix) %in% dup_genes,]
   }
   
@@ -224,8 +224,10 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
   }
   
   results <- list()
-
+  
   if (tools == "all" || "xCell" %in% tools) {
+    library(xCell)
+    data("xCell.data")
     results[["xCell"]] <- xCell::xCellAnalysis(exprMatrix)
   }
   
@@ -241,27 +243,25 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
   
   if (tools == "all" || "quanTIseq" %in% tools) {
     results[["quanTIseq"]] <- quantiseqr::run_quantiseq(
-    expression_data = exprMatrix,
-    signature_matrix = "TIL10",
-    is_arraydata = FALSE,          # RNA-seq, not microarray
-    is_tumordata = TRUE,
-    scale_mRNA = TRUE
-  )
+      expression_data = exprMatrix,
+      signature_matrix = "TIL10",
+      is_arraydata = FALSE,          # RNA-seq, not microarray
+      is_tumordata = TRUE,
+      scale_mRNA = TRUE
+    )
   }
-
+  
   if (tools == "all" || "MCPC" %in% tools) {
-    results[["MCPC"]] <- MCPcounter.estimate(expression = exprMatrix, featuresType = "HUGO_symbols")
+    results[["MCPC"]] <- MCPcounter::MCPcounter.estimate(expression = exprMatrix, featuresType = "HUGO_symbols")
   }
   
   
   for (name in names(results)) {
     results[[name]] <- harmonize_deconvolution(deconvo_output = results[[name]],
-                                               tool_name = name,
-                                               output_dir = output_dir,
-                                               experiment_name = experiment_name)
+                                               tool_name = name)
     
     if (!is.null(output_dir)) {
-      result_with_samples <- cbind(sample = colnames(exprMatrix),
+      result_with_samples <- cbind(cell.type = rownames(results[[name]]),
                                    results[[name]])
       create_output_dir(output_dir)
       write.table(
@@ -271,13 +271,12 @@ run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_n
         quote = FALSE,
         row.names = FALSE
       )
-  }
-  
+    }
+    
   }
   
   return(results)
 }
-
 
 
 #' Run Immune Cell Deconvolution Analysis
