@@ -38,8 +38,6 @@ plot_gsea_enrichment(
 }
 \value{
 Named list of ggplot objects (one per pathway)
-
-Named list of ggplot objects (one per pathway)
 }
 \description{
 Create classical GSEA running enrichment plots for top pathways

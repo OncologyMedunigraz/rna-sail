@@ -11,6 +11,15 @@ summarize_de_results(
   fit_label = "efit"
 )
 }
+\arguments{
+\item{fit}{fit object from differential analysis}
+
+\item{fdr_threshold}{FDR threshold (default: 0.1)}
+
+\item{lfc_threshold}{log-Fold-Change threshold (default: 1)}
+
+\item{fit_label}{Label for the fit (default: "efit")}
+}
 \description{
 Summarize Differential Expression Results
 }

@@ -4,7 +4,14 @@
 #'
 #' @param expr_df Data frame with gene expression (must have a 'gene_id' column)
 #' @param gtf GTF object loaded with rtracklayer::import()
+#'
 #' @return Data frame with only protein-coding genes, rownames as geneName_geneID
+#'
+#' @importFrom S4Vectors mcols
+#' @importFrom stringr str_replace
+#' @importFrom tibble rownames_to_column
+#' @import dplyr
+#'
 #' @export
 filter_protein_coding_genes <- function(expr_df, gtf) {
   # Check required packages
@@ -15,7 +22,7 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
     stop("Required packages (rtracklayer, stringr, dplyr, S4Vectors) not installed")
   }
 
-  mcols_gtf <- S4Vectors::mcols(gtf)
+  mcols_gtf <- mcols(gtf)
 
   # Decide which biotype column to use
   if ("gene_biotype" %in% colnames(mcols_gtf)) {
@@ -34,29 +41,29 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
   ]
 
   # Extract minimal annotation
-  gene_annotations <- S4Vectors::mcols(gene_entries)[, c("gene_id", biotype_col, "gene_name")]
+  gene_annotations <- mcols(gene_entries)[, c("gene_id", biotype_col, "gene_name")]
   gene_annotations_df <- as.data.frame(gene_annotations)
 
   # Clean gene_id versions in GTF annotations
   gene_annotations_df <- gene_annotations_df %>%
-    dplyr::mutate(
-      gene_id_clean = stringr::str_replace(gene_id, "\\..*", ""),
-      gene_name_gtf = gene_name
+    mutate(
+      gene_id_clean = str_replace(.data$gene_id, "\\..*", ""),
+      gene_name_gtf = .data$gene_name
     ) %>%
-    dplyr::select(gene_id_clean, gene_name_gtf, dplyr::all_of(biotype_col))
+    select(gene_id_clean, gene_name_gtf, all_of(biotype_col))
 
   # Clean gene_id versions in expression table
   # If expr_df already has a gene_id column, use it; otherwise assume rownames
   if (!"gene_id" %in% colnames(expr_df)) {
     expr_df <- expr_df %>%
-      tibble::rownames_to_column("gene_id")
+      rownames_to_column("gene_id")
   }
 
   expr_df <- expr_df %>%
-    dplyr::mutate(gene_id_clean = stringr::str_replace(gene_id, "\\..*", ""))
+    dplyr::mutate(gene_id_clean = str_replace(gene_id, "\\..*", ""))
 
   # Join expression with GTF annotation on cleaned gene_id
-  annotated_expr <- dplyr::inner_join(
+  annotated_expr <- inner_join(
     expr_df,
     gene_annotations_df,
     by = "gene_id_clean"
@@ -74,11 +81,11 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
 
   # Drop metadata columns but KEEP gene_name_id
   cleaned_expr <- annotated_expr %>%
-    dplyr::select(
-      -gene_id,
-      -gene_id_clean,
-      -gene_name_gtf,
-      -dplyr::all_of(biotype_col)
+    select(
+      -.data$gene_id,
+      -.data$gene_id_clean,
+      -.data$gene_name_gtf,
+      -all_of(biotype_col)
     )
 
   message("Filtered to ", nrow(cleaned_expr), " protein-coding genes")
@@ -86,6 +93,11 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
   return(cleaned_expr)
 
 }
+
+
+
+
+
 #' Prepare Expression Data for Analysis
 #'
 #' Prepares expression data by log-transforming and filtering samples.
@@ -94,7 +106,9 @@ filter_protein_coding_genes <- function(expr_df, gtf) {
 #' @param log_transform Logical, whether to log2 transform (default: TRUE)
 #' @param pseudocount Pseudocount to add before log transformation (default: 1)
 #' @param remove_samples Character vector of sample names to remove (default: NULL)
+#'
 #' @return Processed expression matrix
+#'
 #' @export
 prepare_expression_data <- function(expr_data,
                                     log_transform = TRUE,
@@ -137,16 +151,26 @@ prepare_expression_data <- function(expr_data,
   # return(list(expr = expr_num, anno = anno_df))
 }
 
+
+
+
+
 #' Clean Sample Names
 #'
 #' Removes leading 'X' from sample names that R adds to numeric column names.
 #'
 #' @param sample_names Character vector of sample names
+#'
 #' @return Character vector of cleaned sample names
+#'
 #' @export
 clean_sample_names <- function(sample_names) {
   gsub("^X", "", sample_names)
 }
+
+
+
+
 
 #' Match Metadata to Expression Data
 #'
@@ -155,7 +179,9 @@ clean_sample_names <- function(sample_names) {
 #' @param expr_data Expression data matrix with samples as columns
 #' @param metadata Data frame with metadata, must have sample ID column
 #' @param sample_id_col Name of the sample ID column in metadata (default: "SampleID")
+#'
 #' @return Ordered metadata data frame matching expression data column order
+#'
 #' @export
 match_metadata_to_expression <- function(expr_data, metadata, sample_id_col = "SampleID") {
   # Clean sample names from expression data
@@ -177,6 +203,9 @@ match_metadata_to_expression <- function(expr_data, metadata, sample_id_col = "S
   return(metadata_ordered)
 }
 
+
+
+
 #' Filter Low Expression Genes
 #'
 #' Removes genes with low expression across samples.
@@ -184,7 +213,9 @@ match_metadata_to_expression <- function(expr_data, metadata, sample_id_col = "S
 #' @param expr_data Expression data matrix (genes x samples)
 #' @param min_count Minimum count threshold (default: 10)
 #' @param min_samples Minimum number of samples that must meet threshold (default: 2)
+#'
 #' @return Filtered expression matrix
+#'
 #' @export
 filter_low_expression_genes <- function(expr_data, min_count = 10, min_samples = 2) {
   # Count samples meeting threshold for each gene

@@ -10,7 +10,8 @@ create_pie_chart(
   lfc_threshold = 1,
   output_file = NULL,
   width = 6,
-  height = 6
+  height = 6,
+  plot_title = "Distribution of Differentially Expressed Genes"
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ create_pie_chart(
 \item{width}{Plot width (default: 6)}
 
 \item{height}{Plot height (default: 6)}
+
+\item{plot_title}{Plot title}
 }
 \value{
 ggplot object

@@ -10,10 +10,15 @@
 #' @param output_dir Output directory for plots and results
 #' @param experiment_name Name for the experiment
 #' @param n_threads Number of threads for WGCNA (default: 2)
+#'
 #' @return List containing module assignments, eigengenes, and trait correlations
+#'
 #' @importFrom dynamicTreeCut cutreeDynamic
+#' @importFrom stats hclust as.dist cor
+#' @importFrom WGCNA enableWGCNAThreads goodSamplesGenes pickSoftThreshold
+#' @importFrom WGCNA adjacency TOMsimilarity labels2colors moduleEigengenes
+#'
 #' @export
-
 run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000,
                               min_module_size = 30, output_dir, experiment_name, n_threads = 2) {
 
@@ -25,7 +30,7 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
   create_output_dir(output_dir)
 
   # Enable WGCNA threads
-  WGCNA::enableWGCNAThreads(nThreads = n_threads)
+  enableWGCNAThreads(nThreads = n_threads)
   options(stringsAsFactors = FALSE)
 
   message("Starting WGCNA analysis with ", n_genes, " most variable genes")
@@ -39,7 +44,7 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
   datExpr <- t(expr_data[top_genes, ])
 
   # Check data quality
-  gsg <- WGCNA::goodSamplesGenes(datExpr, verbose = 3)
+  gsg <- goodSamplesGenes(datExpr, verbose = 3)
   if (!gsg$allOK) {
     message("Removing genes/samples with too many missing values")
     datExpr <- datExpr[gsg$goodSamples, gsg$goodGenes]
@@ -47,7 +52,7 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
 
   # Choose soft-thresholding power
   message("Determining soft-thresholding power...")
-  sft <- WGCNA::pickSoftThreshold(datExpr, powerVector = seq(1, 15, by = 1), verbose = 2)
+  sft <- pickSoftThreshold(datExpr, powerVector = seq(1, 15, by = 1), verbose = 2)
   softPower <- ifelse(!is.na(sft$powerEstimate), sft$powerEstimate, 6)
   message("Using soft power = ", softPower)
 
@@ -56,15 +61,15 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
 
   # Build network and identify modules
   message("Building adjacency matrix and detecting modules...")
-  adj <- WGCNA::adjacency(datExpr, power = softPower)
-  TOM <- WGCNA::TOMsimilarity(adj)
+  adj <- adjacency(datExpr, power = softPower)
+  TOM <- TOMsimilarity(adj)
   dissTOM <- 1 - TOM
 
   # Hierarchical clustering
   geneTree <- hclust(as.dist(dissTOM), method = "average")
 
   # Module identification
-  dynamicMods <- dynamicTreeCut::cutreeDynamic(
+  dynamicMods <- cutreeDynamic(
     dendro = geneTree,
     distM = dissTOM,
     deepSplit = 2,
@@ -72,10 +77,10 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
     minClusterSize = min_module_size
   )
 
-  dynamicColors <- WGCNA::labels2colors(dynamicMods)
+  dynamicColors <- labels2colors(dynamicMods)
   names(dynamicColors) <- colnames(datExpr)
   # Calculate module eigengenes
-  MEList <- WGCNA::moduleEigengenes(datExpr, colors = dynamicColors)
+  MEList <- moduleEigengenes(datExpr, colors = dynamicColors)
   MEs <- MEList$eigengenes
 
   # Order modules by clustering
@@ -89,13 +94,74 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
   trait_data <- create_trait_matrix(metadata, trait_column)
   module_trait_results <- analyze_module_trait_relationships(MEs, trait_data, output_dir, experiment_name)
 
-  # Create visualizations
-  plot_dendrogram_and_modules <- function(geneTree, moduleColors, output_dir, experiment_name) {
+
+
+
+  plot_dendrogram_and_modules(geneTree, dynamicColors, output_dir, experiment_name)
+  plot_module_trait_heatmap(module_trait_results$moduleTraitCor, module_trait_results$moduleTraitP,
+                           output_dir, experiment_name)
+  plot_module_eigengenes(MEs, trait_data, output_dir, experiment_name)
+
+  # Gene significance and module membership analysis
+  if (ncol(trait_data) == 1) {
+    gene_module_analysis <- analyze_gene_significance(datExpr, trait_data[,1], dynamicColors,
+                                                    output_dir, experiment_name)
+  } else {
+    gene_module_analysis <- NULL
+    message("Skipping gene significance analysis (multiple traits detected)")
+  }
+
+  # Save results
+  save_wgcna_results(dynamicColors, MEs, module_trait_results, gene_module_analysis,
+                    output_dir, experiment_name)
+
+  # Clean up
+  rm(adj, TOM, dissTOM)
+  gc()
+
+  results <- list(
+    moduleColors = dynamicColors,
+    moduleEigengenes = MEs,
+    moduleTraitCor = module_trait_results$moduleTraitCor,
+    moduleTraitP = module_trait_results$moduleTraitP,
+    geneTree = geneTree,
+    softPower = softPower,
+    datExpr = datExpr,
+    trait_data = trait_data
+  )
+
+  if (!is.null(gene_module_analysis)) {
+    results$geneSignificance <- gene_module_analysis
+  }
+
+  message("WGCNA analysis completed!")
+  return(results)
+}
+
+
+
+
+
+
+#' Plot Dendrogram and Modules
+#'
+#' @param geneTree gene Tree
+#' @param moduleColors colors for modules
+#' @param output_dir path of the output directory
+#' @param experiment_name Name of the experiment
+#'
+#' @return a plot
+#'
+#' @keywords internal
+#'
+#' @importFrom WGCNA plotDendroAndColors
+#' @import grDevices
+plot_dendrogram_and_modules <- function(geneTree, moduleColors, output_dir, experiment_name) {
 
   output_file <- file.path(output_dir, paste0(experiment_name, "_gene_dendrogram_modules.pdf"))
 
   pdf(output_file, width = 12, height = 6)
-  WGCNA::plotDendroAndColors(
+  plotDendroAndColors(
     geneTree, moduleColors, "Module colors",
     dendroLabels = FALSE, hang = 0.03,
     addGuide = TRUE, guideHang = 0.05,
@@ -106,6 +172,9 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
   message("Dendrogram plot saved to: ", output_file)
 }
 
+
+
+
 #' Plot Module-Trait Heatmap
 #'
 #' Creates a heatmap showing correlations between modules and traits.
@@ -114,8 +183,17 @@ run_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000
 #' @param moduleTraitP Module-trait p-value matrix
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
+#'
 #' @keywords internal
+#'
+#' @importFrom WGCNA labeledHeatmap blueWhiteRed
+#' @import grDevices
+#' @import ComplexHeatmap
+#' @importFrom circlize colorRamp2
+#' @importFrom grid grid.text gpar
+#' @importFrom graphics par
 plot_module_trait_heatmap <- function(moduleTraitCor, moduleTraitP, output_dir, experiment_name) {
 
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
@@ -126,18 +204,18 @@ plot_module_trait_heatmap <- function(moduleTraitCor, moduleTraitP, output_dir, 
 
     # Create text matrix for significance
     textMatrix <- paste(signif(moduleTraitCor, 2), "\n(",
-                       signif(moduleTraitP, 1), ")", sep = "")
+                        signif(moduleTraitP, 1), ")", sep = "")
     dim(textMatrix) <- dim(moduleTraitCor)
 
     # Plot heatmap
     par(mar = c(6, 8.5, 3, 3))
-    WGCNA::labeledHeatmap(
+    labeledHeatmap(
       Matrix = moduleTraitCor,
       xLabels = colnames(moduleTraitCor),
       yLabels = rownames(moduleTraitCor),
       ySymbols = rownames(moduleTraitCor),
       colorLabels = FALSE,
-      colors = WGCNA::blueWhiteRed(50),
+      colors = blueWhiteRed(50),
       textMatrix = textMatrix,
       setStdMargins = FALSE,
       cex.text = 0.8,
@@ -155,12 +233,12 @@ plot_module_trait_heatmap <- function(moduleTraitCor, moduleTraitP, output_dir, 
     sig_matrix[moduleTraitP < 0.001] <- "***"
 
     pdf(output_file, width = 8, height = 6)
-    ht <- ComplexHeatmap::Heatmap(
+    ht <- Heatmap(
       moduleTraitCor,
       name = "Correlation",
-      col = circlize::colorRamp2(c(-1, 0, 1), c("blue", "white", "red")),
+      col = colorRamp2(c(-1, 0, 1), c("blue", "white", "red")),
       cell_fun = function(j, i, x, y, w, h, col) {
-        grid::grid.text(sig_matrix[i, j], x, y, gp = grid::gpar(fontsize = 12))
+        grid.text(sig_matrix[i, j], x, y, gp = gpar(fontsize = 12))
       },
       cluster_rows = TRUE,
       cluster_columns = FALSE,
@@ -169,12 +247,16 @@ plot_module_trait_heatmap <- function(moduleTraitCor, moduleTraitP, output_dir, 
       column_title = "Module-Trait Correlations",
       heatmap_legend_param = list(title = "Correlation")
     )
-    print(ht)
+    draw(ht)
     dev.off()
   }
 
   message("Module-trait heatmap saved to: ", output_file)
 }
+
+
+
+
 
 #' Plot Module Eigengenes
 #'
@@ -184,8 +266,13 @@ plot_module_trait_heatmap <- function(moduleTraitCor, moduleTraitP, output_dir, 
 #' @param trait_data Trait data
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
+#'
 #' @keywords internal
+#'
+#' @import ggplot2
+#' @importFrom tidyr pivot_longer
 plot_module_eigengenes <- function(MEs, trait_data, output_dir, experiment_name) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
@@ -209,33 +296,36 @@ plot_module_eigengenes <- function(MEs, trait_data, output_dir, experiment_name)
   }
 
   # Convert to long format
-  ME_long <- tidyr::pivot_longer(ME_data, cols = starts_with("ME"),
-                                names_to = "Module", values_to = "Eigengene")
+  ME_long <- pivot_longer(ME_data, cols = starts_with("ME"),
+                          names_to = "Module", values_to = "Eigengene")
   ME_long$Module <- gsub("ME", "", ME_long$Module)
 
   # Create boxplot
-  p1 <- ggplot2::ggplot(ME_long, ggplot2::aes(x = factor(trait), y = Eigengene, fill = factor(trait))) +
-    ggplot2::geom_boxplot(alpha = 0.7) +
-    ggplot2::geom_jitter(width = 0.2, alpha = 0.6) +
-    ggplot2::facet_wrap(~Module, scales = "free_y", ncol = 4) +
-    ggplot2::labs(
+  p1 <- ggplot(ME_long, aes(x = factor(.data$trait), y = .data$Eigengene,
+                            fill = factor(.data$trait))) +
+    geom_boxplot(alpha = 0.7) +
+    geom_jitter(width = 0.2, alpha = 0.6) +
+    facet_wrap(~Module, scales = "free_y", ncol = 4) +
+    labs(
       title = "Module Eigengenes by Trait",
       x = trait_name,
       y = "Module Eigengene",
       fill = trait_name
     ) +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-      strip.text = ggplot2::element_text(face = "bold"),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    theme_minimal() +
+    theme(
+      strip.text = element_text(face = "bold"),
+      axis.text.x = element_text(angle = 45, hjust = 1)
     )
 
   # Save plot
   output_file <- file.path(output_dir, paste0(experiment_name, "_module_eigengenes.pdf"))
-  ggplot2::ggsave(output_file, p1, width = 12, height = 8)
+  ggsave(output_file, p1, width = 12, height = 8)
 
   message("Module eigengene plot saved to: ", output_file)
 }
+
+
 
 #' Analyze Gene Significance and Module Membership
 #'
@@ -246,8 +336,13 @@ plot_module_eigengenes <- function(MEs, trait_data, output_dir, experiment_name)
 #' @param moduleColors Module assignments
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return Data frame with gene significance and module membership
+#'
 #' @keywords internal
+#'
+#' @importFrom WGCNA corPvalueStudent moduleEigengenes
+#' @importFrom stats cor
 analyze_gene_significance <- function(datExpr, trait, moduleColors, output_dir, experiment_name) {
 
   if (!requireNamespace("WGCNA", quietly = TRUE)) {
@@ -256,12 +351,12 @@ analyze_gene_significance <- function(datExpr, trait, moduleColors, output_dir, 
 
   # Calculate gene significance
   geneTraitSignificance <- as.numeric(cor(datExpr, trait, use = "p"))
-  GSPvalue <- as.numeric(WGCNA::corPvalueStudent(as.matrix(geneTraitSignificance), nrow(datExpr)))
+  GSPvalue <- as.numeric(corPvalueStudent(as.matrix(geneTraitSignificance), nrow(datExpr)))
 
   # Calculate module membership
   modNames <- substring(names(table(moduleColors)), 3)
-  geneModuleMembership <- as.data.frame(cor(datExpr, WGCNA::moduleEigengenes(datExpr, moduleColors)$eigengenes, use = "p"))
-  MMPvalue <- as.data.frame(WGCNA::corPvalueStudent(as.matrix(geneModuleMembership), nrow(datExpr)))
+  geneModuleMembership <- as.data.frame(cor(datExpr, moduleEigengenes(datExpr, moduleColors)$eigengenes, use = "p"))
+  MMPvalue <- as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nrow(datExpr)))
 
   names(geneModuleMembership) <- paste("MM", modNames, sep = "")
   names(MMPvalue) <- paste("p.MM", modNames, sep = "")
@@ -281,7 +376,7 @@ analyze_gene_significance <- function(datExpr, trait, moduleColors, output_dir, 
   write.table(gene_results, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE)
 
   # Create scatter plot for most correlated module
-  trait_cor <- cor(WGCNA::moduleEigengenes(datExpr, moduleColors)$eigengenes, trait, use = "p")
+  trait_cor <- cor(moduleEigengenes(datExpr, moduleColors)$eigengenes, trait, use = "p")
   best_module <- names(which.max(abs(trait_cor)))
   best_module_clean <- gsub("ME", "", best_module)
 
@@ -291,6 +386,10 @@ analyze_gene_significance <- function(datExpr, trait, moduleColors, output_dir, 
   return(gene_results)
 }
 
+
+
+
+
 #' Plot Gene Significance vs Module Membership
 #'
 #' Creates scatter plot of gene significance vs module membership.
@@ -299,8 +398,12 @@ analyze_gene_significance <- function(datExpr, trait, moduleColors, output_dir, 
 #' @param module_name Module name to plot
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
+#'
 #' @keywords internal
+#'
+#' @import ggplot2
 plot_gene_significance_vs_mm <- function(gene_results, module_name, output_dir, experiment_name) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -318,22 +421,25 @@ plot_gene_significance_vs_mm <- function(gene_results, module_name, output_dir, 
   }
 
   # Create plot
-  p <- ggplot2::ggplot(module_genes, ggplot2::aes_string(x = mm_col, y = "geneTraitSignificance")) +
-    ggplot2::geom_point(alpha = 0.6) +
-    ggplot2::geom_smooth(method = "lm", se = TRUE, color = "red") +
-    ggplot2::labs(
+  p <- ggplot(module_genes, ggplot2::aes_string(x = mm_col, y = "geneTraitSignificance")) +
+    geom_point(alpha = 0.6) +
+    geom_smooth(method = "lm", se = TRUE, color = "red") +
+    labs(
       title = paste("Gene Significance vs Module Membership -", module_name, "Module"),
       x = paste("Module Membership in", module_name, "module"),
       y = "Gene significance for trait"
     ) +
-    ggplot2::theme_minimal()
+    theme_minimal()
 
   # Save plot
   output_file <- file.path(output_dir, paste0(experiment_name, "_GS_vs_MM_", module_name, ".pdf"))
-  ggplot2::ggsave(output_file, p, width = 8, height = 6)
+  ggsave(output_file, p, width = 8, height = 6)
 
   message("GS vs MM plot saved to: ", output_file)
 }
+
+
+
 
 #' Save WGCNA Results
 #'
@@ -345,16 +451,20 @@ plot_gene_significance_vs_mm <- function(gene_results, module_name, output_dir, 
 #' @param gene_module_analysis Gene significance analysis results
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (invisible)
+#'
 #' @keywords internal
+#'
+#' @importFrom utils write.table
 save_wgcna_results <- function(moduleColors, MEs, module_trait_results, gene_module_analysis,
-                              output_dir, experiment_name) {
+                               output_dir, experiment_name) {
 
   # Save module assignments
   module_file <- file.path(output_dir, paste0(experiment_name, "_module_assignments.tsv"))
 
   module_df <- data.frame(
-    gene = colnames(datExpr),
+    gene = names(moduleColors),
     module = moduleColors
   )
 
@@ -413,6 +523,10 @@ save_wgcna_results <- function(moduleColors, MEs, module_trait_results, gene_mod
   invisible()
 }
 
+
+
+
+
 #' Get Hub Genes from WGCNA Modules
 #'
 #' Identifies hub genes (highly connected genes) within each module.
@@ -420,8 +534,12 @@ save_wgcna_results <- function(moduleColors, MEs, module_trait_results, gene_mod
 #' @param datExpr Expression data used in WGCNA
 #' @param moduleColors Module assignments
 #' @param n_hub_genes Number of hub genes to return per module (default: 10)
+#'
 #' @return Data frame with hub genes for each module
+#'
 #' @export
+#'
+#' @importFrom WGCNA moduleEigengenes
 get_hub_genes <- function(datExpr, moduleColors, n_hub_genes = 10) {
 
   if (!requireNamespace("WGCNA", quietly = TRUE)) {
@@ -429,8 +547,8 @@ get_hub_genes <- function(datExpr, moduleColors, n_hub_genes = 10) {
   }
 
   # Calculate module membership for each gene
-  MEs <- WGCNA::moduleEigengenes(datExpr, moduleColors)$eigengenes
-  geneModuleMembership <- as.data.frame(cor(datExpr, MEs, use = "p"))
+  MEs <- moduleEigengenes(datExpr, moduleColors)$eigengenes
+  geneModuleMembership <- as.data.frame(stats::cor(datExpr, MEs, use = "p"))
 
   # Get hub genes for each module
   modules <- unique(moduleColors)
@@ -465,46 +583,10 @@ get_hub_genes <- function(datExpr, moduleColors, n_hub_genes = 10) {
 
   return(hub_genes_df)
 }
-  plot_dendrogram_and_modules(geneTree, dynamicColors, output_dir, experiment_name)
-  plot_module_trait_heatmap(module_trait_results$moduleTraitCor, module_trait_results$moduleTraitP,
-                           output_dir, experiment_name)
-  plot_module_eigengenes(MEs, trait_data, output_dir, experiment_name)
 
-  # Gene significance and module membership analysis
-  if (ncol(trait_data) == 1) {
-    gene_module_analysis <- analyze_gene_significance(datExpr, trait_data[,1], dynamicColors,
-                                                    output_dir, experiment_name)
-  } else {
-    gene_module_analysis <- NULL
-    message("Skipping gene significance analysis (multiple traits detected)")
-  }
 
-  # Save results
-  save_wgcna_results(dynamicColors, MEs, module_trait_results, gene_module_analysis,
-                    output_dir, experiment_name)
 
-  # Clean up
-  rm(adj, TOM, dissTOM)
-  gc()
 
-  results <- list(
-    moduleColors = dynamicColors,
-    moduleEigengenes = MEs,
-    moduleTraitCor = module_trait_results$moduleTraitCor,
-    moduleTraitP = module_trait_results$moduleTraitP,
-    geneTree = geneTree,
-    softPower = softPower,
-    datExpr = datExpr,
-    trait_data = trait_data
-  )
-
-  if (!is.null(gene_module_analysis)) {
-    results$geneSignificance <- gene_module_analysis
-  }
-
-  message("WGCNA analysis completed!")
-  return(results)
-}
 
 #' Plot Soft Threshold Selection
 #'
@@ -513,8 +595,14 @@ get_hub_genes <- function(datExpr, moduleColors, n_hub_genes = 10) {
 #' @param sft Soft threshold analysis results from pickSoftThreshold
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plots)
+#'
 #' @keywords internal
+#'
+#' @import ggplot2
+#' @importFrom gridExtra grid.arrange
+#' @import grDevices
 plot_soft_threshold_selection <- function(sft, output_dir, experiment_name) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -529,36 +617,39 @@ plot_soft_threshold_selection <- function(sft, output_dir, experiment_name) {
   )
 
   # Scale-free topology fit
-  p1 <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Power, y = SFT_R_sq)) +
-    ggplot2::geom_point() +
-    ggplot2::geom_text(ggplot2::aes(label = Power), vjust = -0.5, size = 3) +
-    ggplot2::geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
-    ggplot2::labs(
+  p1 <- ggplot(plot_data, aes(x = .data$Power, y = .data$SFT_R_sq)) +
+    geom_point() +
+    geom_text(aes(label = .data$Power), vjust = -0.5, size = 3) +
+    geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
+    labs(
       title = "Scale-free Topology Model Fit",
       x = "Soft Threshold (power)",
       y = "Scale Free Topology Model Fit, signed R-squared"
     ) +
-    ggplot2::theme_minimal()
+    theme_minimal()
 
   # Mean connectivity
-  p2 <- ggplot2::ggplot(plot_data, ggplot2::aes(x = Power, y = mean_k)) +
-    ggplot2::geom_point() +
-    ggplot2::geom_text(ggplot2::aes(label = Power), vjust = -0.5, size = 3) +
-    ggplot2::labs(
+  p2 <- ggplot(plot_data, aes(x = .data$Power, y = .data$mean_k)) +
+    geom_point() +
+    geom_text(aes(label = .data$Power), vjust = -0.5, size = 3) +
+    labs(
       title = "Mean Connectivity",
       x = "Soft Threshold (power)",
       y = "Mean Connectivity"
     ) +
-    ggplot2::theme_minimal()
+    theme_minimal()
 
   # Save plots
   output_file <- file.path(output_dir, paste0(experiment_name, "_soft_threshold_selection.pdf"))
   pdf(output_file, width = 12, height = 5)
-  print(gridExtra::grid.arrange(p1, p2, ncol = 2))
+  print(grid.arrange(p1, p2, ncol = 2))
   dev.off()
 
   message("Soft threshold selection plots saved to: ", output_file)
 }
+
+
+
 
 #' Create Trait Matrix
 #'
@@ -566,7 +657,9 @@ plot_soft_threshold_selection <- function(sft, output_dir, experiment_name) {
 #'
 #' @param metadata Sample metadata
 #' @param trait_column Column name containing trait information
+#'
 #' @return Numeric matrix of traits
+#'
 #' @keywords internal
 create_trait_matrix <- function(metadata, trait_column) {
 
@@ -591,6 +684,10 @@ create_trait_matrix <- function(metadata, trait_column) {
   return(trait_matrix)
 }
 
+
+
+
+
 #' Analyze Module-Trait Relationships
 #'
 #' Calculates correlations between module eigengenes and traits.
@@ -599,8 +696,14 @@ create_trait_matrix <- function(metadata, trait_column) {
 #' @param trait_data Trait data matrix
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return List with correlation matrix and p-values
+#'
 #' @keywords internal
+#'
+#' @importFrom WGCNA corPvalueStudent
+#' @importFrom stats cor
+#' @importFrom utils write.table
 analyze_module_trait_relationships <- function(MEs, trait_data, output_dir, experiment_name) {
 
   if (!requireNamespace("WGCNA", quietly = TRUE)) {
@@ -608,8 +711,8 @@ analyze_module_trait_relationships <- function(MEs, trait_data, output_dir, expe
   }
 
   # Calculate correlations
-  moduleTraitCor <- cor(MEs, trait_data, use = "pairwise.complete.obs")
-  moduleTraitP <- WGCNA::corPvalueStudent(moduleTraitCor, nrow(MEs))
+  moduleTraitCor <- stats::cor(MEs, trait_data, use = "pairwise.complete.obs")
+  moduleTraitP <- corPvalueStudent(moduleTraitCor, nrow(MEs))
 
   # Save correlation results
   cor_file <- file.path(output_dir, paste0(experiment_name, "_module_trait_correlations.tsv"))
@@ -624,6 +727,11 @@ analyze_module_trait_relationships <- function(MEs, trait_data, output_dir, expe
   return(list(moduleTraitCor = moduleTraitCor, moduleTraitP = moduleTraitP))
 }
 
+
+
+
+
+
 #' Perform Functional Enrichment Analysis for Significant WGCNA Modules
 #'
 #' Identifies significant modules and performs GO/KEGG/Reactome enrichment analysis
@@ -636,7 +744,9 @@ analyze_module_trait_relationships <- function(MEs, trait_data, output_dir, expe
 #' @param output_dir Output directory for results
 #' @param experiment_name Experiment name prefix
 #' @param species_id STRING species ID (default: 9606 for human)
+#'
 #' @return List containing enrichment results and network data
+#'
 #' @export
 analyze_significant_modules <- function(wgcna_results,
                                        significance_threshold = 0.05,
@@ -725,6 +835,10 @@ analyze_significant_modules <- function(wgcna_results,
   return(enrichment_results)
 }
 
+
+
+
+
 #' Identify Significant Modules
 #'
 #' Identifies modules that are significantly correlated with traits.
@@ -732,7 +846,9 @@ analyze_significant_modules <- function(wgcna_results,
 #' @param wgcna_results WGCNA analysis results
 #' @param significance_threshold P-value threshold
 #' @param min_correlation_threshold Minimum correlation threshold
+#'
 #' @return Vector of significant module names
+#'
 #' @keywords internal
 identify_significant_modules <- function(wgcna_results, significance_threshold, min_correlation_threshold) {
 
@@ -757,13 +873,18 @@ identify_significant_modules <- function(wgcna_results, significance_threshold, 
   return(unique(significant_modules))
 }
 
+
+
+
 #' Get Genes in a Module
 #'
 #' Extracts gene names for a specific module.
 #'
 #' @param wgcna_results WGCNA analysis results
 #' @param module Module name
+#'
 #' @return Vector of gene names
+#'
 #' @keywords internal
 get_module_genes <- function(wgcna_results, module) {
   moduleColors <- wgcna_results$moduleColors
@@ -772,19 +893,26 @@ get_module_genes <- function(wgcna_results, module) {
   return(module_genes)
 }
 
+
+
+
 #' Convert Gene Symbols to Entrez IDs
 #'
 #' Converts gene symbols to Entrez IDs for enrichment analysis.
 #'
 #' @param gene_symbols Vector of gene symbols
 #' @param organism Organism ('human' or 'mouse')
+#'
 #' @return Vector of Entrez IDs
+#'
 #' @keywords internal
+#'
+#' @importFrom clusterProfiler bitr
 convert_gene_symbols_to_entrez <- function(gene_symbols, organism = "human") {
 
   if (organism == "human") {
     org_db <- org.Hs.eg.db::org.Hs.eg.db
-  } else if (organism == "mouse") {
+  } else if (organism == "mouse") {0
     if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) {
       stop("org.Mm.eg.db package required for mouse analysis")
     }
@@ -794,13 +922,16 @@ convert_gene_symbols_to_entrez <- function(gene_symbols, organism = "human") {
   }
 
   # Convert symbols to Entrez IDs
-  entrez_ids <- clusterProfiler::bitr(gene_symbols,
-                                     fromType = "SYMBOL",
-                                     toType = "ENTREZID",
-                                     OrgDb = org_db)
+  entrez_ids <- bitr(gene_symbols,
+                     fromType = "SYMBOL",
+                     toType = "ENTREZID",
+                     OrgDb = org_db)
 
   return(entrez_ids$ENTREZID)
 }
+
+
+
 
 #' Perform Module Enrichment Analysis
 #'
@@ -812,8 +943,16 @@ convert_gene_symbols_to_entrez <- function(gene_symbols, organism = "human") {
 #' @param organism Organism
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return List of enrichment results
+#'
 #' @keywords internal
+#'
+#' @importFrom clusterProfiler enrichGO enrichKEGG setReadable
+#' @importFrom ReactomePA enrichPathway
+#' @importFrom utils write.csv
+#' @importFrom enrichplot dotplot
+#' @importFrom ggplot2 ggtitle ggsave
 perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organism,
                                      output_dir, experiment_name) {
 
@@ -830,7 +969,7 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
   # GO Biological Process
   message("  - GO Biological Process enrichment...")
   tryCatch({
-    go_bp <- clusterProfiler::enrichGO(gene = entrez_genes,
+    go_bp <- enrichGO(gene = entrez_genes,
                                       OrgDb = org_db,
                                       ont = "BP",
                                       pAdjustMethod = "BH",
@@ -846,9 +985,9 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
 
       # Create plot
       if (nrow(go_bp@result) >= 5) {
-        p <- enrichplot::dotplot(go_bp, showCategory = 15) +
-          ggplot2::ggtitle(paste("GO BP Enrichment -", module, "Module"))
-        ggplot2::ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_GO_BP.pdf")),
+        p <- dotplot(go_bp, showCategory = 15) +
+          ggtitle(paste("GO BP Enrichment -", module, "Module"))
+        ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_GO_BP.pdf")),
                        p, width = 10, height = 8)
       }
     }
@@ -859,12 +998,13 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
   # GO Molecular Function
   message("  - GO Molecular Function enrichment...")
   tryCatch({
-    go_mf <- clusterProfiler::enrichGO(gene = entrez_genes,
-                                      OrgDb = org_db,
-                                      ont = "MF",
-                                      pAdjustMethod = "BH",
-                                      pvalueCutoff = 0.05,
-                                      readable = TRUE)
+    go_mf <- enrichGO(gene = entrez_genes,
+                      OrgDb = org_db,
+                      ont = "MF",
+                      pAdjustMethod = "BH",
+                      pvalueCutoff = 0.05,
+                      readable = TRUE)
+
     enrichment_results$GO_MF <- go_mf
 
     if (!is.null(go_mf) && nrow(go_mf@result) > 0) {
@@ -873,9 +1013,9 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
                row.names = FALSE)
 
       if (nrow(go_mf@result) >= 5) {
-        p <- enrichplot::dotplot(go_mf, showCategory = 15) +
-          ggplot2::ggtitle(paste("GO MF Enrichment -", module, "Module"))
-        ggplot2::ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_GO_MF.pdf")),
+        p <- dotplot(go_mf, showCategory = 15) +
+          ggtitle(paste("GO MF Enrichment -", module, "Module"))
+        ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_GO_MF.pdf")),
                        p, width = 10, height = 8)
       }
     }
@@ -886,14 +1026,14 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
   # KEGG Pathway
   message("  - KEGG pathway enrichment...")
   tryCatch({
-    kegg <- clusterProfiler::enrichKEGG(gene = entrez_genes,
-                                       organism = kegg_organism,
-                                       pvalueCutoff = 0.05,
-                                       pAdjustMethod = "BH")
+    kegg <- enrichKEGG(gene = entrez_genes,
+                       organism = kegg_organism,
+                       pvalueCutoff = 0.05,
+                       pAdjustMethod = "BH")
 
     if (!is.null(kegg) && nrow(kegg@result) > 0) {
       # Convert to readable format
-      kegg <- clusterProfiler::setReadable(kegg, org_db, keyType = "ENTREZID")
+      kegg <- setReadable(kegg, org_db, keyType = "ENTREZID")
       enrichment_results$KEGG <- kegg
 
       write.csv(kegg@result,
@@ -901,9 +1041,9 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
                row.names = FALSE)
 
       if (nrow(kegg@result) >= 5) {
-        p <- enrichplot::dotplot(kegg, showCategory = 15) +
-          ggplot2::ggtitle(paste("KEGG Enrichment -", module, "Module"))
-        ggplot2::ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_KEGG.pdf")),
+        p <- dotplot(kegg, showCategory = 15) +
+          ggtitle(paste("KEGG Enrichment -", module, "Module"))
+        ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_KEGG.pdf")),
                        p, width = 10, height = 8)
       }
     }
@@ -915,10 +1055,10 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
   if (organism == "human") {
     message("  - Reactome pathway enrichment...")
     tryCatch({
-      reactome <- ReactomePA::enrichPathway(gene = entrez_genes,
-                                          pvalueCutoff = 0.05,
-                                          pAdjustMethod = "BH",
-                                          readable = TRUE)
+      reactome <- enrichPathway(gene = entrez_genes,
+                                pvalueCutoff = 0.05,
+                                pAdjustMethod = "BH",
+                                readable = TRUE)
 
       if (!is.null(reactome) && nrow(reactome@result) > 0) {
         enrichment_results$Reactome <- reactome
@@ -928,9 +1068,9 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
                  row.names = FALSE)
 
         if (nrow(reactome@result) >= 5) {
-          p <- enrichplot::dotplot(reactome, showCategory = 15) +
-            ggplot2::ggtitle(paste("Reactome Enrichment -", module, "Module"))
-          ggplot2::ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_Reactome.pdf")),
+          p <- dotplot(reactome, showCategory = 15) +
+            ggtitle(paste("Reactome Enrichment -", module, "Module"))
+          ggsave(file.path(output_dir, paste0(experiment_name, "_", module, "_Reactome.pdf")),
                          p, width = 10, height = 8)
         }
       }
@@ -942,6 +1082,9 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
   return(enrichment_results)
 }
 
+
+
+
 #' Create STRING Network
 #'
 #' Creates protein-protein interaction network using STRINGdb.
@@ -951,8 +1094,14 @@ perform_module_enrichment <- function(entrez_genes, gene_symbols, module, organi
 #' @param species_id STRING species ID
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return STRING network data
+#'
 #' @keywords internal
+#'
+#' @import grDevices
+#' @importFrom utils write.csv
+#' @importFrom graphics title
 create_string_network <- function(gene_symbols, module, species_id, output_dir, experiment_name) {
 
   message("  - Creating STRING network...")
@@ -1025,6 +1174,9 @@ create_string_network <- function(gene_symbols, module, species_id, output_dir, 
   })
 }
 
+
+
+
 #' Create Enrichment Summary Report
 #'
 #' Creates a summary report of all enrichment analyses.
@@ -1033,8 +1185,12 @@ create_string_network <- function(gene_symbols, module, species_id, output_dir, 
 #' @param significant_modules Vector of significant module names
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates files)
+#'
 #' @keywords internal
+#'
+#' @importFrom utils write.csv
 create_enrichment_summary_report <- function(enrichment_results, significant_modules,
                                             output_dir, experiment_name) {
 
@@ -1113,6 +1269,9 @@ create_enrichment_summary_report <- function(enrichment_results, significant_mod
   message("Detailed report saved to: ", report_file)
 }
 
+
+
+
 #' Enhanced WGCNA Analysis with Functional Enrichment
 #'
 #' Runs complete WGCNA analysis followed by functional enrichment analysis.
@@ -1130,7 +1289,9 @@ create_enrichment_summary_report <- function(enrichment_results, significant_mod
 #' @param min_correlation_threshold Minimum absolute correlation for significance (default: 0.3)
 #' @param organism Organism for enrichment analysis (default: 'human')
 #' @param species_id STRING species ID (default: 9606 for human)
+#'
 #' @return List containing WGCNA results and enrichment results
+#'
 #' @export
 run_enhanced_wgcna_analysis <- function(expr_data, metadata, trait_column, n_genes = 3000,
                                        min_module_size = 30, output_dir, experiment_name,

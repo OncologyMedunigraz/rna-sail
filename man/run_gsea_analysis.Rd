@@ -6,18 +6,19 @@
 \usage{
 run_gsea_analysis(
   de_results,
-  species = "Mus musculus",
+  species = "MM",
   category = "H",
   subcategory = NULL,
   min_size = 15,
   max_size = 500,
-  n_perm = 1e+05
+  n_perm = 1e+05,
+  extra_pathways = NULL
 )
 }
 \arguments{
 \item{de_results}{Differential expression results from limma (efit object or data frame)}
 
-\item{species}{Species for gene sets ("Mus musculus" or "Homo sapiens")}
+\item{species}{Species for gene sets ("MM" or "HS")}
 
 \item{category}{MSigDB category (default: "H" for Hallmark)}
 
@@ -28,6 +29,8 @@ run_gsea_analysis(
 \item{max_size}{Maximum gene set size (default: 500)}
 
 \item{n_perm}{Number of permutations (default: 100000)}
+
+\item{extra_pathways}{Named list with the extra pathways to consider (optional)}
 }
 \value{
 fgsea results data frame

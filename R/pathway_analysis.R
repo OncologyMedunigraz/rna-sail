@@ -11,6 +11,9 @@
 #' @param n_perm Number of permutations (default: 100000)
 #' @param extra_pathways Named list with the extra pathways to consider (optional)
 #' @return fgsea results data frame
+#' @import fgsea
+#' @import limma
+#' @import msigdbr
 #' @export
 run_gsea_analysis <- function(de_results, species = "MM", category = "H",
                               subcategory = NULL, min_size = 15, max_size = 500,
@@ -36,13 +39,13 @@ run_gsea_analysis <- function(de_results, species = "MM", category = "H",
   # Get gene sets
   message("Loading gene sets for ", species, ", category: ", category)
   if (is.null(subcategory)) {
-    gene_sets_df <- msigdbr::msigdbr(
+    gene_sets_df <- msigdbr(
       db_species  = species,
       species     = species1,
       collection  = category
     )
   } else {
-    gene_sets_df <- msigdbr::msigdbr(
+    gene_sets_df <- msigdbr(
       db_species  = species,
       species     = species1,
       collection  = category,
@@ -53,7 +56,7 @@ run_gsea_analysis <- function(de_results, species = "MM", category = "H",
   gene_sets <- split(gene_sets_df$ensembl_gene, gene_sets_df$gs_name)
 
   message("Loaded ", length(gene_sets), " gene sets")
-  
+
   # Add user-provided pathways if given
   if (!is.null(extra_pathways)) {
     if (!is.list(extra_pathways) || is.null(names(extra_pathways))) {
@@ -68,7 +71,7 @@ run_gsea_analysis <- function(de_results, species = "MM", category = "H",
     ranks <- de_results$logFC
     names(ranks) <- sub(".*_", "", rownames(de_results))
   } else {
-    efit_results <- limma::topTreat(de_results, coef = 1, n = Inf)
+    efit_results <- topTreat(de_results, coef = 1, n = Inf)
     ranks <- efit_results$logFC
     names(ranks) <- sub(".*_", "", rownames(efit_results))
   }
@@ -79,7 +82,7 @@ run_gsea_analysis <- function(de_results, species = "MM", category = "H",
   # Run GSEA
   message("Running GSEA with ", n_perm, " permutations...")
   set.seed(123)
-  gsea_results <- fgsea::fgsea(
+  gsea_results <- fgsea(
     pathways    = gene_sets,
     stats       = ranks,
     minSize     = min_size,
@@ -112,23 +115,12 @@ run_gsea_analysis <- function(de_results, species = "MM", category = "H",
 #' @param padj_threshold Adjusted p-value cutoff for significance (default: 0.05)
 #' @param output_file Optional PDF file to save all plots (multi-page)
 #' @param width,height Plot size in inches when saving to file
-#' @return Named list of ggplot objects (one per pathway)
-#' @export
-#' Plot GSEA enrichment curves
-#'
-#' Create classical GSEA running enrichment plots for top pathways
-#' or for user-specified pathways.
-#'
-#' @param gsea_results Results from fgsea (output of run_gsea_analysis())
-#' @param pathways Optional character vector of pathway names to plot
-#' @param n_up Number of top upregulated pathways to plot (default: 3)
-#' @param n_down Number of top downregulated pathways to plot (default: 3)
-#' @param padj_threshold Adjusted p-value cutoff for significance (default: 0.05)
-#' @param output_file Optional PDF file to save all plots (multi-page)
-#' @param width,height Plot size in inches when saving to file
 #' @param gene_sets Optional list of gene sets (if not supplied, taken from gsea_results attributes)
 #' @param gene_ranks Optional named vector of gene ranks (if not supplied, taken from gsea_results attributes)
 #' @return Named list of ggplot objects (one per pathway)
+#' @import grDevices
+#' @import fgsea
+#' @import ggplot2
 #' @export
 plot_gsea_enrichment <- function(
     gsea_results,
@@ -187,15 +179,15 @@ plot_gsea_enrichment <- function(
   plots <- list()
 
   if (!is.null(output_file)) {
-    grDevices::pdf(output_file, width = width, height = height)
-    on.exit(grDevices::dev.off(), add = TRUE)
+    pdf(output_file, width = width, height = height)
+    on.exit(dev.off(), add = TRUE)
   }
 
   for (pw in pathways) {
     genes <- gene_sets[[pw]]
     if (is.null(genes)) next
 
-    p <- fgsea::plotEnrichment(genes, gene_ranks)
+    p <- plotEnrichment(genes, gene_ranks)
 
     # Get NES / padj for title
     row <- gsea_results[gsea_results$pathway == pw, ][1, ]
@@ -203,13 +195,13 @@ plot_gsea_enrichment <- function(
     pretty_name <- gsub("_", " ", pretty_name)
 
     p <- p +
-      ggplot2::labs(
+      labs(
         title = paste0(pretty_name,
                        "\nNES = ", signif(row$NES, 3),
                        ", padj = ", signif(row$padj, 3))
       ) +
-      ggplot2::theme(
-        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      theme(
+        plot.title = element_text(hjust = 0.5, face = "bold")
       )
 
     plots[[pw]] <- p
@@ -236,7 +228,16 @@ plot_gsea_enrichment <- function(
 #' @param output_file Output PDF file path (optional)
 #' @param width Plot width in inches (default: 8)
 #' @param height Plot height in inches (default: 6)
+#' @param padj_threshold (default: 0.05)
+#' @param color_up (default: red)
+#' @param color_down (default: blue)
+#' @param color_ns (default: grey)
+#' @param plot_title Plot title
+#'
 #' @return ggplot object
+#'
+#' @import ggplot2
+#'
 #' @export
 plot_gsea_barplot <- function(
     gsea_results,
@@ -273,13 +274,13 @@ plot_gsea_barplot <- function(
   plot_data <- plot_data[order(plot_data$NES), , drop = FALSE]
   plot_data$pathway_clean <- factor(plot_data$pathway_clean, levels = plot_data$pathway_clean)
 
-  p <- ggplot2::ggplot(
+  p <- ggplot(
     plot_data,
-    ggplot2::aes(x = pathway_clean, y = NES, fill = category)
+    aes(x = .data$pathway_clean, y = .data$NES, fill = .data$category)
   ) +
-    ggplot2::geom_col(width = 0.7) +
-    ggplot2::coord_flip() +
-    ggplot2::scale_fill_manual(
+    geom_col(width = 0.7) +
+    coord_flip() +
+    scale_fill_manual(
       values = c(
         "Upregulated"     = color_up,
         "Downregulated"   = color_down,
@@ -287,26 +288,29 @@ plot_gsea_barplot <- function(
       ),
       name = "Category"
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
-    ggplot2::labs(
+    theme_minimal(base_size = 11) +
+    labs(
       title = plot_title,
       x     = "Pathway",
       y     = "Normalized Enrichment Score (NES)"
     ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
-      axis.text.y = ggplot2::element_text(size = 10),
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      axis.text.y = element_text(size = 10),
       legend.position = "bottom"
     ) +
-    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "grey50")
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50")
 
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("GSEA barplot saved to: ", output_file)
   }
 
   return(p)
 }
+
+
+
 
 #' Create GSEA Dotplot
 #'
@@ -317,7 +321,16 @@ plot_gsea_barplot <- function(
 #' @param output_file Output PDF file path (optional)
 #' @param width Plot width in inches (default: 10)
 #' @param height Plot height in inches (default: 8)
+#' @param padj_threshold (default: 0.05)
+#' @param color_up (default: red)
+#' @param color_down (default: blue)
+#' @param color_ns (default: grey)
+#' @param plot_title Plot title
+#'
 #' @return ggplot object
+#'
+#' @import ggplot2
+#'
 #' @export
 plot_gsea_dotplot <- function(
     gsea_results,
@@ -355,15 +368,15 @@ plot_gsea_dotplot <- function(
   plot_data$category[!is.na(plot_data$padj) & plot_data$padj < padj_threshold & plot_data$NES > 0] <- "Upregulated"
   plot_data$category[!is.na(plot_data$padj) & plot_data$padj < padj_threshold & plot_data$NES < 0] <- "Downregulated"
 
-  p <- ggplot2::ggplot(
+  p <- ggplot(
     plot_data,
-    ggplot2::aes(x = NES, y = pathway_clean)
+    aes(x = .data$NES, y = .data$pathway_clean)
   ) +
-    ggplot2::geom_point(
-      ggplot2::aes(size = size, color = category),
+    geom_point(
+      aes(size = .data$size, color = .data$category),
       alpha = 0.9
     ) +
-    ggplot2::scale_color_manual(
+    scale_color_manual(
       values = c(
         "Upregulated"     = color_up,
         "Downregulated"   = color_down,
@@ -371,22 +384,22 @@ plot_gsea_dotplot <- function(
       ),
       name = "Category"
     ) +
-    ggplot2::scale_size_continuous(name = "Gene set size", range = c(2, 8)) +
-    ggplot2::theme_minimal(base_size = 11) +
-    ggplot2::labs(
+    scale_size_continuous(name = "Gene set size", range = c(2, 8)) +
+    theme_minimal(base_size = 11) +
+    labs(
       title = plot_title,
       x     = "Normalized Enrichment Score (NES)",
       y     = NULL
     ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
       legend.position = "right",
-      axis.text.y = ggplot2::element_text(size = 9)
+      axis.text.y = element_text(size = 9)
     ) +
-    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "grey50")
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey50")
 
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("GSEA dotplot saved to: ", output_file)
   }
 
@@ -405,7 +418,13 @@ plot_gsea_dotplot <- function(
 #' @param output_file Output PDF file path (optional)
 #' @param width Plot width in inches (default: 11)
 #' @param height Plot height in inches (default: 15)
+#'
 #' @return None (creates plot)
+#'
+#' @import grid
+#' @import fgsea
+#' @import grDevices
+#'
 #' @export
 create_gsea_table_plot <- function(gsea_results, gene_sets, gene_ranks,
                                    n_pathways = 30,
@@ -441,12 +460,12 @@ create_gsea_table_plot <- function(gsea_results, gene_sets, gene_ranks,
 
   # Open device if requested
   if (!is.null(output_file)) {
-    grDevices::pdf(output_file, width = width, height = height)
-    on.exit(grDevices::dev.off(), add = TRUE)
+    pdf(output_file, width = width, height = height)
+    on.exit(dev.off(), add = TRUE)
   }
 
   # Create grob
-  p <- fgsea::plotGseaTable(
+  p <- plotGseaTable(
     pathways  = gene_sets[top_pathways],
     stats     = gene_ranks,
     fgseaRes  = gsea_results,
@@ -454,8 +473,8 @@ create_gsea_table_plot <- function(gsea_results, gene_sets, gene_ranks,
   )
 
   # Actually draw it
-  grid::grid.newpage()
-  grid::grid.draw(p)
+  grid.newpage()
+  grid.draw(p)
 
   if (!is.null(output_file)) {
     message("GSEA table plot saved to: ", output_file)
@@ -474,7 +493,12 @@ create_gsea_table_plot <- function(gsea_results, gene_sets, gene_ranks,
 #' @param gene_sets List of gene sets (indices)
 #' @param species Species for gene sets ("Mus musculus" or "Homo sapiens")
 #' @param min_size Minimum gene set size (default: 15)
+#'
 #' @return Camera results data frame
+#'
+#' @import limma
+#' @import msigdbr
+#'
 #' @export
 run_camera_analysis <- function(voom_object, design_matrix, contrast_vector, gene_sets = NULL,
                                species = "Mus musculus", min_size = 15) {
@@ -495,7 +519,7 @@ run_camera_analysis <- function(voom_object, design_matrix, contrast_vector, gen
   # If gene_sets not provided, use Hallmark sets
   if (is.null(gene_sets)) {
     message("Loading Hallmark gene sets for ", species)
-    h_gene_sets <- msigdbr::msigdbr(db_species = species, species = species1, collection  = "H")
+    h_gene_sets <- msigdbr(db_species = species, species = species1, collection  = "H")
     gene_sets_list <- split(h_gene_sets$ensembl_gene, h_gene_sets$gs_name)
 
     # Extract ENSEMBL IDs from rownames
@@ -516,7 +540,7 @@ run_camera_analysis <- function(voom_object, design_matrix, contrast_vector, gen
   message("Running camera analysis with ", length(gene_sets_indices), " gene sets")
 
   # Run camera
-  camera_results <- limma::camera(
+  camera_results <- camera(
     y = voom_object$E,
     index = gene_sets_indices,
     design = design_matrix,
@@ -566,20 +590,22 @@ save_pathway_results <- function(gsea_results, camera_results = NULL, experiment
 
 
 
-                                     
+
 
 #' Retrive Custom Pathways
 #'
-#' @param file.path the pathway to an excel file with each sheet named 
-#' after the specific pathway and inside a table with at least one of the 
+#' @param file.path the pathway to an excel file with each sheet named
+#' after the specific pathway and inside a table with at least one of the
 #' following cols (named like that): "NCBI", "ENSEMBL", and/or "Symbol"
 #' @param species either "human" or "mouse"
 #' @param matrix_row_names the row names of the RNA-Seq data matrix (if available)
 #'
 #' @return a named list with the pathways and the respective genes
+#' @importFrom biomaRt useEnsembl getBM
+#' @import readxl
 #' @export
 retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
-  
+
   # Check required packages
   required_pkgs <- c("readxl", "biomaRt")
   for (pkg in required_pkgs) {
@@ -587,43 +613,43 @@ retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
       stop("Package '", pkg, "' is required but not installed")
     }
   }
-  
-  
+
+
   pathway_list <- list()
-  
-  
-  pathway_names <- readxl::excel_sheets(file.path)
+
+
+  pathway_names <- excel_sheets(file.path)
   for (pathway in pathway_names) {
-    excel.df <- readxl::read_excel(file.path, sheet=pathway)
-    
+    excel.df <- read_excel(file.path, sheet=pathway)
+
     if ("ENSEMBL" %in% colnames(excel.df)) {
       n <- length(unique(excel.df$ENSEMBL))
       pathway_list[[pathway]] <- unique(excel.df$ENSEMBL)
     } else {
-      ensembl <- biomaRt::useEnsembl(biomart = "genes", 
+      ensembl <- useEnsembl(biomart = "genes",
                                      dataset = if (species=="mouse")  "mmusculus_gene_ensembl" else "hsapiens_gene_ensembl")
-      
+
       if ("NCBI" %in% colnames(excel.df)) {
         n <- length(unique(excel.df$NCBI)) - if (any(is.na(excel.df$NCBI))) 1 else 0
-        gene_IDs <- biomaRt::getBM(attributes = c("entrezgene_id", "ensembl_gene_id", "external_gene_name"),
-                                   filters = "entrezgene_id", values = unique(excel.df$NCBI), 
+        gene_IDs <- getBM(attributes = c("entrezgene_id", "ensembl_gene_id", "external_gene_name"),
+                                   filters = "entrezgene_id", values = unique(excel.df$NCBI),
                                    mart = ensembl, useCache = FALSE)
       } else {
         if ("Symbol" %in% colnames(excel.df)) {
           n <- length(unique(excel.df$Symbol)) - if (any(is.na(excel.df$NCBI))) 1 else 0
-          gene_IDs <- biomaRt::getBM(attributes = c("hgnc_symbol", "ensembl_gene_id", "entrezgene_id"),
+          gene_IDs <- getBM(attributes = c("hgnc_symbol", "ensembl_gene_id", "entrezgene_id"),
                                      filters = "hgnc_symbol", values = unique(excel.df$Symbol),
                                      mart = ensembl, useCache = TRUE)
         } else  stop("There is no column with NCBI, ENSEMBL, or Symbol ID in sheet:", pathway)
       }
-      
+
       pathway_list[[pathway]] <- unique(gene_IDs$ensembl_gene_id)
       message(pathway, " pathway has been added with ", length(unique(gene_IDs$entrezgene_id)), " genes found out of ", n)
-      
+
       if (!is.null(matrix_row_names)) {
         matrix_row_ensembl <- sapply(matrix_row_names, function(x) strsplit(x, split="_")[[1]][2])
         remove.ind <- which(!pathway_list[[pathway]] %in% matrix_row_ensembl)
-        
+
         if (length(remove.ind)>0) {
           message("\nThe following genes were not found in the expression data:")
           print(pathway_list[[pathway]][remove.ind])
@@ -632,6 +658,6 @@ retrieve_pathway <- function(file.path, species, matrix_row_names = NULL) {
       }
     }
   }
-  
+
   return(pathway_list)
 }

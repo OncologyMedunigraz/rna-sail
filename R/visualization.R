@@ -9,7 +9,22 @@
 #' @param n_labels Number of top genes to label (default: 10)
 #' @param width Plot width in inches (default: 10)
 #' @param height Plot height in inches (default: 8)
+#' @param color_up (default: red)
+#' @param color_down (default: blue)
+#' @param color_ns (default: grey)
+#' @param point_size (default: 2.5)
+#' @param label_size (default: 3.5)
+#' @param n_labels_up How many labels for the up (default: NULL)
+#' @param n_labels_down How many labels for the down (default: NULL)
+#' @param gene_label_column Which is the column to label genes (default: NULL)
+#' @param highlight_genes Which genes to highlight (default: NULL)
+#' @param plot_title Plot title
+#'
 #' @return ggplot object
+#'
+#' @import ggplot2
+#' @importFrom ggrepel geom_text_repel
+#'
 #' @export
 create_volcano_plot <- function(
     de_results,
@@ -132,17 +147,17 @@ create_volcano_plot <- function(
   }
 
   # Create plot
-  p <- ggplot2::ggplot(
+  p <- ggplot(
     plot_data,
-    ggplot2::aes(
-      x     = logFC,
-      y     = -log10(adj.P.Val),
-      color = significance,
-      label = label
+    aes(
+      x     = .data$logFC,
+      y     = -log10(.data$adj.P.Val),
+      color = .data$significance,
+      label = .data$label
     )
   ) +
-    ggplot2::geom_point(alpha = 0.9, size = point_size) +
-    ggplot2::scale_color_manual(
+    geom_point(alpha = 0.9, size = point_size) +
+    scale_color_manual(
       values = c(
         "Not Significant" = color_ns,
         "Upregulated"     = color_up,
@@ -150,30 +165,30 @@ create_volcano_plot <- function(
       ),
       name = "Significance"
     ) +
-    ggplot2::geom_vline(
+    geom_vline(
       xintercept = c(-lfc_threshold, lfc_threshold),
       linetype   = "dashed",
       color      = "grey40"
     ) +
-    ggplot2::geom_hline(
+    geom_hline(
       yintercept = -log10(fdr_threshold),
       linetype   = "dashed",
       color      = "grey40"
     ) +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::labs(
+    theme_minimal(base_size = 12) +
+    labs(
       title = plot_title,
       x     = expression(log[2] ~ "Fold Change"),
       y     = expression(-log[10] ~ "Adjusted P-value")
     ) +
-    ggplot2::theme(
-      plot.title      = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    theme(
+      plot.title      = element_text(hjust = 0.5, face = "bold"),
       legend.position = "bottom"
     )
 
   # Add labels
   if (any(plot_data$label != "")) {
-    p <- p + ggrepel::geom_text_repel(
+    p <- p + geom_text_repel(
       data               = plot_data[plot_data$label != "", ],
       max.overlaps       = 20,
       min.segment.length = 0.1,
@@ -187,7 +202,7 @@ create_volcano_plot <- function(
 
   # Save if requested
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("Volcano plot saved to: ", output_file)
   }
 
@@ -207,7 +222,12 @@ create_volcano_plot <- function(
 #' @param output_file Output file path (optional)
 #' @param width Plot width (default: 8)
 #' @param height Plot height (default: 6)
+#'
 #' @return List containing ggplot object and PCA results
+#'
+#' @import ggplot2
+#' @importFrom stats var prcomp
+#'
 #' @export
 create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
                             color_mapping = NULL, output_file = NULL,
@@ -255,45 +275,45 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
     levels_color <- unique(na.omit(metadata_matched[[color_by]]))
     n_levels <- length(levels_color)
 
-    color_mapping <- get_palette(n_conditions = n_levels, 
+    color_mapping <- get_palette(n_conditions = n_levels,
                                  val_conditions = levels_color)
   }
-                       
-  p <- ggplot2::ggplot(
+
+  p <- ggplot(
     pca_data,
-    ggplot2::aes(x = PC1, y = PC2, color = .data[[color_by]])
+    aes(x = .data$PC1, y = .data$PC2, color = .data[[color_by]])
   ) +
-    ggplot2::geom_point(size = 3, alpha = 0.8) +
-    ggplot2::scale_color_manual(values = color_mapping) +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::labs(
+    geom_point(size = 3, alpha = 0.8) +
+    scale_color_manual(values = color_mapping) +
+    theme_minimal(base_size = 12) +
+    labs(
       title = "Principal Component Analysis",
       x = paste0("PC1 (", round(var_explained[1], 1), "% variance)"),
       y = paste0("PC2 (", round(var_explained[2], 1), "% variance)"),
       color = color_by
     ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
       legend.position = "bottom"
     )
 
   # Add shape aesthetic if provided
   if (!is.null(shape_by)) {
     p <- p +
-      ggplot2::aes(shape = .data[[shape_by]]) +
-      ggplot2::labs(shape = shape_by)
+      aes(shape = .data[[shape_by]]) +
+      labs(shape = shape_by)
   }
 
   # Optional: add sample labels
   p <- p +
-    ggplot2::geom_text(
-      ggplot2::aes(label = Sample),
+    geom_text(
+      aes(label = .data$Sample),
       vjust = -0.5, size = 3, show.legend = FALSE
     )
 
   # ── 6. Save plot ───────────────────────────────────────────
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("PCA plot saved to: ", output_file)
   }
 
@@ -317,15 +337,24 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
 #' @param col_cluster Whether to cluster samples (default: TRUE)
 #' @param rank_order Whether to sort genes by variability prior to selection (default: TRUE)
 #' @param long_heatmap Whether to plot a long heatmap with gene labels (default: FALSE)
+#' @param title Title
+#' @param row_cluster Whether to cluster genes (default: TRUE)
+#'
 #' @return ComplexHeatmap object or base heatmap
+#'
+#' @import ComplexHeatmap
+#' @importFrom circlize colorRamp2
+#' @importFrom grid gpar
+#' @import grDevices
+#'
 #' @export
 create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n_genes = 500,
                                       scale_data = TRUE, color_mapping = NULL,
                                       output_file = NULL, min.width = 5, height = 8,
-                                      title = NULL, col_cluster = TRUE, row_cluster = TRUE, 
+                                      title = NULL, col_cluster = TRUE, row_cluster = TRUE,
                                       rank_order = TRUE,
                                       long_heatmap = FALSE) {
-    
+
   message("starting heatmap ")
 
   gene_vars <- apply(expr_data, 1, var, na.rm = TRUE)
@@ -342,6 +371,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
   metadata_ordered <- metadata[sample_order, , drop = FALSE]
   metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
   expr_scaled <- expr_scaled[, colnames(expr_scaled) %in% metadata_ordered$SampleID, drop = FALSE]
+
   message("starting heatmap 2")
   if (requireNamespace("ComplexHeatmap", quietly = TRUE) &&
       requireNamespace("circlize", quietly = TRUE)) {
@@ -361,10 +391,10 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
                                              val_conditions = unique_vals)
           }
       }
-      
+
       message("starting heatmap 4")
       print(col_list)
-      ha <- ComplexHeatmap::HeatmapAnnotation(
+      ha <- HeatmapAnnotation(
           df = annotation_data,
           col = col_list
       )
@@ -381,21 +411,21 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
           height <- if (long_heatmap) 4+0.15*length(top_genes) else height
           pdf(output_file, width = min.width+0.18*ncol(expr_scaled), height = height)
       }
-      
+
       message("starting heatmap 6")
-      
+
       # !!! Fixed colour intensity scale for non-norm. data, show_row_names, row_names_side, row_name_gp, col_cluster, title !!!
-      ht <- ComplexHeatmap::Heatmap(
+      ht <- Heatmap(
           expr_scaled,
           name = ifelse(scale_data, "Expression Z-score", "Expression"),
-          col = circlize::colorRamp2(
+          col = colorRamp2(
               if (scale_data) c(-2, 0, 2) else {c(min(expr_scaled, na.rm = TRUE), 0, max(expr_scaled, na.rm = TRUE))},
               c("blue", "white", "red")
           ),
           top_annotation = ha,
           show_row_names = long_heatmap,
           row_names_side = "left",
-          row_names_gp = grid::gpar(fontsize = 10),
+          row_names_gp = gpar(fontsize = 10),
           show_column_names = TRUE,
           cluster_rows = row_cluster,
           cluster_columns = col_cluster,
@@ -403,7 +433,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
           heatmap_legend_param = list(direction = "vertical")
       )
 
-      ComplexHeatmap::draw(ht)
+      draw(ht)
       if (!is.null(output_file)) {
           dev.off()
           message("Expression heatmap saved to: ", output_file)
@@ -412,7 +442,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
       return(ht)
   } else {
 
-      
+
     stop("ComplexHeatmap and circlize packages are required for heatmap plotting.")
   }
 }
@@ -421,7 +451,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
 
 
 
-                       
+
 #' Create MA Plot
 #'
 #' Creates an MA plot (log ratio vs mean average) from differential expression results.
@@ -431,7 +461,13 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
 #' @param output_file Output file path (optional)
 #' @param width Plot width (default: 8)
 #' @param height Plot height (default: 6)
+#' @param plot_title Plot Title
+#'
 #' @return ggplot object
+#'
+#' @import ggplot2
+#' @importFrom limma topTable
+#'
 #' @export
 create_ma_plot <- function(de_results, fdr_threshold = 0.05, output_file = NULL,
                            width = 8, height = 6, plot_title = "MA Plot - Mean vs Log Fold Change") {
@@ -448,7 +484,7 @@ create_ma_plot <- function(de_results, fdr_threshold = 0.05, output_file = NULL,
     }
   } else {
     # limma efit object
-    results_table <- limma::topTable(de_results, number = Inf)
+    results_table <- topTable(de_results, number = Inf)
     plot_data <- results_table
   }
 
@@ -456,28 +492,30 @@ create_ma_plot <- function(de_results, fdr_threshold = 0.05, output_file = NULL,
   plot_data$significant <- plot_data$adj.P.Val < fdr_threshold
 
   # Create plot
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = AveExpr, y = logFC, color = significant)) +
-    ggplot2::geom_point(alpha = 0.6, size = 1) +
-    ggplot2::scale_color_manual(
+  p <- ggplot(plot_data, aes(x = .data$AveExpr, y = .data$logFC,
+                             color = .data$significant)
+              ) +
+    geom_point(alpha = 0.6, size = 1) +
+    scale_color_manual(
       values = c("FALSE" = "grey50", "TRUE" = "#E31A1C"),
       name = paste0("FDR < ", fdr_threshold),
       labels = c("Not Significant", "Significant")
     ) +
-    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::labs(
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal(base_size = 12) +
+    labs(
       title = plot_title,
       x = "Average Expression",
       y = expression(log[2]~"Fold Change")
     ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
       legend.position = "bottom"
     )
 
   # Save if requested
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("MA plot saved to: ", output_file)
   }
 
@@ -494,7 +532,13 @@ create_ma_plot <- function(de_results, fdr_threshold = 0.05, output_file = NULL,
 #' @param output_file Output file path (optional)
 #' @param width Plot width (default: 6)
 #' @param height Plot height (default: 6)
+#' @param plot_title Plot title
+#'
 #' @return ggplot object
+#'
+#' @import ggplot2
+#' @importFrom limma decideTests
+#'
 #' @export
 create_pie_chart <- function(de_results, fdr_threshold = 0.05, lfc_threshold = 1,
                             output_file = NULL, width = 6, height = 6,
@@ -509,7 +553,7 @@ create_pie_chart <- function(de_results, fdr_threshold = 0.05, lfc_threshold = 1
     results_data <- de_results
   } else {
     # Use limma decideTests
-    decisions <- limma::decideTests(de_results, p.value = fdr_threshold, lfc = lfc_threshold)
+    decisions <- decideTests(de_results, p.value = fdr_threshold, lfc = lfc_threshold)
     up_count <- sum(decisions == 1)
     down_count <- sum(decisions == -1)
     ns_count <- sum(decisions == 0)
@@ -526,28 +570,28 @@ create_pie_chart <- function(de_results, fdr_threshold = 0.05, lfc_threshold = 1
                               results_data$percentage, "%)")
 
   # Create pie chart
-  p <- ggplot2::ggplot(results_data, ggplot2::aes(x = "", y = count, fill = category)) +
-    ggplot2::geom_bar(stat = "identity", width = 1) +
-    ggplot2::coord_polar(theta = "y") +
-    ggplot2::scale_fill_manual(
+  p <- ggplot(results_data, aes(x = "", y = .data$count, fill = .data$category)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    scale_fill_manual(
       values = c("Upregulated" = "#E31A1C", "Downregulated" = "#1F78B4",
                 "Not Significant" = "grey70"),
       name = "Gene Category"
     ) +
-    ggplot2::theme_void() +
-    ggplot2::labs(title = plot_title,
+    theme_void() +
+    labs(title = plot_title,
                   caption = paste0("The number of Non-Significant DE genes is:", ns_count)) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", size = 14),
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
       legend.position = "bottom"
     ) +
-    ggplot2::geom_text(ggplot2::aes(label = count),
-                      position = ggplot2::position_stack(vjust = 0.5),
+    geom_text(aes(label = count),
+                      position = position_stack(vjust = 0.5),
                       color = "white", size = 4, fontface = "bold")
 
   # Save if requested
   if (!is.null(output_file)) {
-    ggplot2::ggsave(output_file, plot = p, width = width, height = height)
+    ggsave(output_file, plot = p, width = width, height = height)
     message("Pie chart saved to: ", output_file)
   }
 
@@ -565,7 +609,14 @@ create_pie_chart <- function(de_results, fdr_threshold = 0.05, lfc_threshold = 1
 #' @param output_file Output file path
 #' @param width Plot width (default: 16)
 #' @param height Plot height (default: 12)
+#'
 #' @return Combined plot object
+#'
+#' @import ggplot2
+#' @importFrom gridExtra grid.arrange
+#' @importFrom grid textGrob gpar
+#' @import grDevices
+#'
 #' @export
 create_summary_plot <- function(expr_data, de_results, metadata, condition_column,
                                output_file, width = 16, height = 12) {
@@ -577,19 +628,19 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
   # Create individual plots
   message("Creating PCA plot...")
   pca_plot <- create_pca_plot(expr_data, metadata, color_by = condition_column)$plot +
-    ggplot2::theme(legend.position = "none")
+    theme(legend.position = "none")
 
   message("Creating volcano plot...")
   volcano_plot <- create_volcano_plot(de_results, n_labels = 5,fdr_threshold = 0.1, lfc_threshold = 1) +
-    ggplot2::theme(legend.position = "none")
+    theme(legend.position = "none")
 
   message("Creating MA plot...")
   ma_plot <- create_ma_plot(de_results) +
-    ggplot2::theme(legend.position = "none")
+    theme(legend.position = "none")
 
   message("Creating pie chart...")
   pie_plot <- create_pie_chart(de_results) +
-    ggplot2::theme(legend.position = "none")
+    theme(legend.position = "none")
 
   # Combine plots
   pdf(output_file, width = width, height = height)
@@ -598,8 +649,8 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
     pca_plot, volcano_plot,
     ma_plot, pie_plot,
     ncol = 2, nrow = 2,
-    top = grid::textGrob("RNA-seq Analysis Summary",
-                        gp = grid::gpar(fontsize = 16, fontface = "bold"))
+    top = textGrob("RNA-seq Analysis Summary",
+                        gp = gpar(fontsize = 16, fontface = "bold"))
   )
 
   print(combined_plot)
@@ -608,10 +659,8 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
   message("Summary plot saved to: ", output_file)
 
   return(combined_plot)
-}#' Create Volcano Plot
-#'
-#' Creates a volcano plot from limma differential expression results.
-#
+}
+
 
 
 
@@ -637,19 +686,23 @@ create_summary_plot <- function(expr_data, de_results, metadata, condition_colum
 #' @param ... extra parameters for create_expression_heatmap()
 #'
 #' @return prints the plot and saves it in the specified directory
+#'
+#' @import ggplot2
+#' @importFrom ggpubr stat_pvalue_manual
+#'
 #' @export
 plot_gene_expression <- function(results, gene_vector, output_dir,
                                  group_by="cell_line", facet_by="condition",
                                  remove_samples=NULL, species = "human", remove_id = TRUE,
                                  stat_test="wilcox.test", p_correction="fdr",
-                                 col_cluster=TRUE, row_cluster=TRUE, plot_title=NULL, ext="pdf", 
+                                 col_cluster=TRUE, row_cluster=TRUE, plot_title=NULL, ext="pdf",
                                  file_name="Expression_heatmap_of_selected_genes", ...) {
 
   required_pkgs <- c("ggplot2", "ggpubr", "ComplexHeatmap", "circlize")
   check_packages(required_pkgs)
 
   RNAseqData <- results$preprocessing
-  
+
   # Removing indicated samples
   if (!is.null(remove_samples)) {
     remove_ind <- RNAseqData$metadata$SampleID %in% remove_samples
@@ -659,49 +712,47 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
 
   #Check if Symbol has been used
   prefix_ensembl <- switch(species, human = "ENSG", mouse = "ENSMUSG")
-  
+
   gene_vector <- ifelse(grepl(prefix_ensembl, gene_vector),
                         gene_vector,
                         paste0("^", gene_vector, "_"))
-  
-  
+
+
   chunks <- split(gene_vector, ceiling(seq_along(gene_vector) / 50))
   ind <- unlist(lapply(chunks, function(chunk) {
     grep(paste(chunk, collapse = "|"), rownames(RNAseqData$pc_tpm))
   }), recursive = T)
-  
-  
+
+
   # Recovered genes
   genes_tpc <- RNAseqData$pc_tpm[ind, ,
                                  drop=F]
-  
+
   # To avoid genes not found
   new.order <- sapply(gene_vector, function(x) {
     val <- grep(x, rownames(genes_tpc))
     if (length(val) == 0) NA else val})
-  
+
   genes_tpc <- genes_tpc[na.omit(new.order), , drop=F]
   gene_vector <- unique(rownames(genes_tpc))
   message("Genes recovered:\n", paste(gene_vector, collapse="\n"))
-  
+
   if (remove_id) rownames(genes_tpc) <- sub("_.*", "", rownames(genes_tpc))
-    
+
   # Order is assumed
   plot_data <- cbind(RNAseqData$metadata,t(genes_tpc))
-  
-  
+
+
   # Boxplot or Heatmap
   if (length(gene_vector)==1) {
-    library(ggplot2)
-    library(ggpubr)
-    
+
     message("starting boxplot")
-    
-    p_vals <- PvalCalc(data=plot_data, facet.col=facet_by, 
+
+    p_vals <- PvalCalc(data=plot_data, facet.col=facet_by,
                     y.col=gene_vector, x.col=group_by,
                     stat_test=stat_test, p_correction = p_correction)
-    
-    p <- ggplot(data = plot_data, mapping = aes(x=.data[[group_by]], 
+
+    p <- ggplot(data = plot_data, mapping = aes(x=.data[[group_by]],
                                            y=.data[[gene_vector]],
                                            fill=.data[[group_by]])) +
       geom_boxplot() +
@@ -712,13 +763,11 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
       theme_minimal() +
       theme(plot.caption=element_text(colour="grey30", size=10, hjust = 1)) +
       stat_pvalue_manual(p_vals,
-                        label = "p.adj",
-                        tip.length = 0.01)
+                         label = "p.adj",
+                         tip.length = 0.01)
 
   } else {
-    library(ComplexHeatmap)
-    library(circlize)
-    
+
     message("starting heatmap")
 
     p <- create_expression_heatmap(
@@ -730,7 +779,7 @@ plot_gene_expression <- function(results, gene_vector, output_dir,
     )
 
   }
-  
+
   print(p)
 
   return(p)

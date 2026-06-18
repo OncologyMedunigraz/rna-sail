@@ -6,14 +6,15 @@
 \usage{
 plot_gsea_barplot(
   gsea_results,
-  n_pathways = 20,
+  n_pathways = 30,
   output_file = NULL,
   width = 8,
   height = 6,
   padj_threshold = 0.05,
   color_up = "#E31A1C",
   color_down = "#1F78B4",
-  color_ns = "grey70"
+  color_ns = "grey70",
+  plot_title = "GSEA Results - Top Enriched Pathways"
 )
 }
 \arguments{
@@ -26,6 +27,16 @@ plot_gsea_barplot(
 \item{width}{Plot width in inches (default: 8)}
 
 \item{height}{Plot height in inches (default: 6)}
+
+\item{padj_threshold}{(default: 0.05)}
+
+\item{color_up}{(default: red)}
+
+\item{color_down}{(default: blue)}
+
+\item{color_ns}{(default: grey)}
+
+\item{plot_title}{Plot title}
 }
 \value{
 ggplot object

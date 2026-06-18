@@ -9,7 +9,8 @@ create_lincs_heatmap(
   results_table,
   output_dir,
   experiment_name,
-  n_compounds = 20
+  n_compounds = 20,
+  n_genes = 100
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ create_lincs_heatmap(
 \item{experiment_name}{Experiment name}
 
 \item{n_compounds}{Number of compounds to show (default: 20)}
+
+\item{n_genes}{Number of genes to show (default: 100)}
 }
 \value{
 pheatmap object

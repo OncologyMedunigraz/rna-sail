@@ -21,7 +21,31 @@
 #' @param run_tf_analysis Whether to run transcription factor analysis (default: TRUE)
 #' @param run_immune_analysis Whether to run immune deconvolution (default: TRUE)
 #' @param run_lincs_analysis Whether to run LINCS connectivity analysis (default: TRUE)
+#' @param covariates covariates
+#' @param design_formula design formula
+#' @param contrast_string contrast string
+#' @param lfc_threshold log-Fold-Change threshold
+#' @param fdr_threshold FDR threshold
+#' @param genes_to_label which genes to label
+#' @param color_volcano_up (default: red)
+#' @param color_volcano_down (default: blue)
+#' @param point_size_volcano size of point in Volcano plot
+#' @param label_size_volcano size of labels in Volcano plot
+#' @param n_labels_up Number of labels for the up
+#' @param n_labels_down Number of labels for the down
+#' @param color_gsea_up (default: red)
+#' @param color_gsea_down (default: blue)
+#' @param color_gsea_ns (default: grey)
+#' @param n_gsea_enrich_up Number of Enrichment plots for the up
+#' @param n_gsea_enrich_down Number of Enrichment plots for the up
+#' @param n_gsea_pathways Number of GSEA pathways
+#' @param ssgsea_n_boxplot_pathways Number of boxplots for ssGSEA pathways
+#'
 #' @return List containing results from all analyses
+#'
+#' @importFrom rtracklayer import
+#' @importFrom utils read.table read.delim
+#'
 #' @export
 run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file,
                                  group1_condition, group2_condition,
@@ -61,7 +85,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   message("Step 1: Loading and preprocessing data...")
 
   # Load data
-  gtf <- rtracklayer::import(gtf_file)
+  gtf <- import(gtf_file)
   counts <- read.table(counts_file, header = TRUE, sep = "\t")
   colnames(counts)<-c(colnames(counts)[1:2],clean_sample_names(colnames(counts)[3:length(colnames(counts))]))
 
@@ -99,7 +123,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   )
   # ========== 2. Exploratory Data Analysis ==========
   message("\nStep 2: Exploratory data analysis...")
-  
+
   # PCA plot
   pca_result <- create_pca_plot(
     pc_tpm_processed, metadata_matched,
@@ -114,7 +138,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   )
 
   # Long Expression heatmap
-  
+
   create_expression_heatmap(
     pc_tpm_processed, metadata_matched,
     annotation_columns = condition_column,
@@ -177,8 +201,8 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   message("\nStep 4: Pathway analysis...")
 
   extra_pathways <- if (!is.null(extra_pathways_file)) retrieve_pathway(extra_pathways_file, species, rownames(pc_tpm_processed)) else NULL
-  
-  
+
+
   # GSEA analysis
   gsea_results <- run_gsea_analysis(
     de_results = de_results$de_results$efit,
@@ -192,7 +216,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   print(gsea_gene_sets)
   print(gsea_gene_ranks)
 
-  
+
   # Create GSEA visualizations
   plot_gsea_barplot(
     gsea_results,
@@ -211,6 +235,7 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
     color_down = color_gsea_down,
     color_ns = color_gsea_ns
   )
+
   create_gsea_table_plot(
     gsea_results,
     output_file = file.path(output_dir, paste0(experiment_name, "_GSEA_tableplot.pdf")),
@@ -354,6 +379,8 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
   return(results)
 }
 
+
+
 #' Run Streamlined Pipeline
 #'
 #' Runs a streamlined version of the pipeline with essential analyses only.
@@ -367,7 +394,9 @@ run_complete_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file
 #' @param experiment_name Experiment name
 #' @param output_dir Output directory
 #' @param species Species (default: "mouse")
+#'
 #' @return List with essential results
+#'
 #' @export
 run_streamlined_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_file,
                                    group1_condition, group2_condition,
@@ -396,6 +425,9 @@ run_streamlined_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_f
   return(results)
 }
 
+
+
+
 #' Create Analysis Summary Report
 #'
 #' Creates a comprehensive text summary report of all analyses.
@@ -405,7 +437,11 @@ run_streamlined_pipeline <- function(counts_file, tpm_file, metadata_file, gtf_f
 #' @param output_dir Output directory
 #' @param group1_condition Group 1 condition name
 #' @param group2_condition Group 2 condition name
+#'
 #' @return None (creates report file)
+#'
+#' @importFrom utils head
+#'
 #' @keywords internal
 create_analysis_summary_report <- function(results, experiment_name, output_dir,
                                          group1_condition, group2_condition) {
@@ -504,29 +540,30 @@ create_analysis_summary_report <- function(results, experiment_name, output_dir,
   }
 
   # Immune analysis summary
-  if (!is.null(results$immune_analysis)) {
-    cat("IMMUNE CELL DECONVOLUTION:\n", file = report_file, append = TRUE)
-    cat("---------------------------\n", file = report_file, append = TRUE)
-
-    if (!is.null(results$immune_analysis$statistical_results)) {
-      stats_results <- results$immune_analysis$statistical_results
-      sig_immune <- stats_results[stats_results$Test_Method == "Wilcoxon" &
-                                 stats_results$Adjusted_P_Value < 0.05, ]
-
-      cat("Cell types with significant differences:", nrow(sig_immune), "\n",
-          file = report_file, append = TRUE)
-
-      if (nrow(sig_immune) > 0) {
-        cat("Significantly different cell types:\n", file = report_file, append = TRUE)
-        for (i in 1:min(5, nrow(sig_immune))) {
-          cat("  ", sig_immune$Cell_Type[i], " (adj.p = ",
-              signif(sig_immune$Adjusted_P_Value[i], 3), ")\n",
-              file = report_file, append = TRUE)
-        }
-      }
-    }
-    cat("\n", file = report_file, append = TRUE)
-  }
+  # To be re-thought
+  # if (!is.null(results$immune_analysis)) {
+  #   cat("IMMUNE CELL DECONVOLUTION:\n", file = report_file, append = TRUE)
+  #   cat("---------------------------\n", file = report_file, append = TRUE)
+  #
+  #   if (!is.null(results$immune_analysis$statistical_results)) {
+  #     stats_results <- results$immune_analysis$statistical_results
+  #     sig_immune <- stats_results[stats_results$Test_Method == "Wilcoxon" &
+  #                                stats_results$Adjusted_P_Value < 0.05, ]
+  #
+  #     cat("Cell types with significant differences:", nrow(sig_immune), "\n",
+  #         file = report_file, append = TRUE)
+  #
+  #     if (nrow(sig_immune) > 0) {
+  #       cat("Significantly different cell types:\n", file = report_file, append = TRUE)
+  #       for (i in 1:min(5, nrow(sig_immune))) {
+  #         cat("  ", sig_immune$Cell_Type[i], " (adj.p = ",
+  #             signif(sig_immune$Adjusted_P_Value[i], 3), ")\n",
+  #             file = report_file, append = TRUE)
+  #       }
+  #     }
+  #   }
+  #   cat("\n", file = report_file, append = TRUE)
+  # }
 
   # LINCS analysis summary
   if (!is.null(results$lincs)) {
@@ -602,6 +639,8 @@ create_analysis_summary_report <- function(results, experiment_name, output_dir,
   message("Analysis summary report saved to: ", report_file)
 }
 
+
+
 #' Validate Pipeline Inputs
 #'
 #' Validates that all required input files exist and have the correct format.
@@ -614,7 +653,11 @@ create_analysis_summary_report <- function(results, experiment_name, output_dir,
 #' @param group2_condition Group 2 condition name
 #' @param condition_column Condition column name
 #' @param sample_id_column Sample ID column name
+#'
 #' @return Logical indicating if all inputs are valid
+#'
+#' @importFrom utils read.table
+#'
 #' @export
 validate_pipeline_inputs <- function(counts_file, tpm_file, metadata_file, gtf_file,
                                     group1_condition, group2_condition,
@@ -695,11 +738,14 @@ validate_pipeline_inputs <- function(counts_file, tpm_file, metadata_file, gtf_f
   return(TRUE)
 }
 
+
+
 #' Get Pipeline Configuration
 #'
 #' Returns the default configuration settings for the pipeline.
 #'
 #' @return List with default pipeline settings
+#'
 #' @export
 get_pipeline_config <- function() {
 
@@ -741,12 +787,16 @@ get_pipeline_config <- function() {
   return(config)
 }
 
+
+
 #' Update Pipeline Configuration
 #'
 #' Updates pipeline configuration with user-specified settings.
 #'
 #' @param config_updates List of configuration updates
+#'
 #' @return Updated configuration list
+#'
 #' @export
 update_pipeline_config <- function(config_updates) {
 

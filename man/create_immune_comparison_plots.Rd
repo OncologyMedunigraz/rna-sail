@@ -13,7 +13,7 @@ create_immune_comparison_plots(
 )
 }
 \arguments{
-\item{immune_scores}{Immune cell scores matrix (cell types x samples)}
+\item{immune_scores}{named list with Immune cell scores matrices (cell types x samples) per tool}
 
 \item{metadata}{Sample metadata}
 
