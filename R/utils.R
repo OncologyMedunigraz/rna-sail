@@ -23,7 +23,11 @@
 #' Helper function to install missing CRAN packages.
 #'
 #' @param packages Character vector of package names to check and install
+#'
 #' @return None (invisible)
+#'
+#' @importFrom utils install.packages
+#'
 #' @export
 install_if_missing <- function(packages) {
   for (pkg in packages) {
@@ -40,7 +44,12 @@ install_if_missing <- function(packages) {
 #' Helper function to install missing Bioconductor packages.
 #'
 #' @param packages Character vector of Bioconductor package names
+#'
 #' @return None (invisible)
+#'
+#' @importFrom utils install.packages
+#' @importFrom BiocManager install
+#'
 #' @export
 bioc_install_if_missing <- function(packages) {
   if (!requireNamespace("BiocManager", quietly = TRUE)) {
@@ -49,7 +58,7 @@ bioc_install_if_missing <- function(packages) {
 
   for (pkg in packages) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
-      BiocManager::install(pkg, ask = FALSE, update = FALSE)
+      install(pkg, ask = FALSE, update = FALSE)
     }
     library(pkg, character.only = TRUE)
   }
@@ -61,7 +70,9 @@ bioc_install_if_missing <- function(packages) {
 #' Helper function to check if a column has finite values and non-zero variance.
 #'
 #' @param x Numeric vector to check
+#'
 #' @return Logical indicating if column is valid
+#'
 #' @keywords internal
 is_good_column <- function(x) {
   all(is.finite(x)) && var(x) > 0
@@ -72,7 +83,9 @@ is_good_column <- function(x) {
 #' Creates output directory if it doesn't exist.
 #'
 #' @param dir_path Path to directory to create
+#'
 #' @return Character path to directory
+#'
 #' @export
 create_output_dir <- function(dir_path) {
   if (!dir.exists(dir_path)) {
@@ -87,6 +100,7 @@ create_output_dir <- function(dir_path) {
 #' Returns the default list of required packages for the pipeline.
 #'
 #' @return Character vector of package names
+#'
 #' @export
 get_required_packages <- function() {
   c(
@@ -102,6 +116,7 @@ get_required_packages <- function() {
 #' Returns the default list of required Bioconductor packages.
 #'
 #' @return Character vector of Bioconductor package names
+#'
 #' @export
 get_required_bioc_packages <- function() {
   c(
@@ -115,7 +130,9 @@ get_required_bioc_packages <- function() {
 #' Check if a series of Packages is installed
 #'
 #' @param required_pkgs vector of names of the required packages
+#'
 #' @return Prints uninstalled packages
+#'
 #' @export
 check_packages <- function(required_pkgs) {
   for (pkg in required_pkgs) {
@@ -136,14 +153,21 @@ check_packages <- function(required_pkgs) {
 #' @param p_correction the type of p_correction to implement (default: "none")
 #'
 #' @return df with the p-vals for the various comparisons
+#'
+#' @importFrom utils combn
+#' @importFrom stats as.formula
+#' @importFrom rlang .data
+#' @import ggpubr
+#' @import dplyr
+#'
 #' @export
 PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "none") {
-  
+
   check_packages(c("dplyr", "ggpubr"))
-  
+
   comps <- combn(levels(factor(data[[x.col]])), m = 2, simplify = FALSE)
-  
-  res <- ggpubr::compare_means(
+
+  res <- compare_means(
     formula    = as.formula(paste(y.col, "~", x.col)),
     data       = data,
     method     = stat_test,
@@ -151,35 +175,47 @@ PvalCalc <- function(data, facet.col, y.col, x.col, stat_test, p_correction = "n
     p.adjust.method = p_correction,
     group.by   = facet.col
   )
-  
+
   # Calculate y positions row-wise using mapply
   # (avoids coercion to character matrix)
   res$y.position <- mapply(function(g1, g2, facet_val) {
     max(data[data[[x.col]] %in% c(g1, g2) & data[[facet.col]] == facet_val, y.col])
   }, res$group1, res$group2, res[[facet.col]])
-  
+
   # Offset y positions per facet to avoid label overlap
   res <- res %>%
-    dplyr::group_by(.data[[facet.col]]) %>%
-    dplyr::mutate(y.position = y.position + seq(0, by = 0.1, length.out = dplyr::n())) %>%
-    dplyr::ungroup()
-  
+    group_by(.data[[facet.col]]) %>%
+    mutate(y.position = .data$y.position + seq(0, by = 0.1, length.out = n())) %>%
+    ungroup()
+
   return(res)
 }
 
 
 
+#' Creating palette
+#'
+#' @param n_conditions Number of conditions to colour
+#' @param val_conditions Values of conditions to colour
+#'
+#' @return a named list with colours for each condition
+#'
+#' @importFrom stats setNames
+#' @importFrom RColorBrewer brewer.pal
+#' @importFrom grDevices colorRampPalette
+#'
+#' @export
 get_palette <- function(n_conditions, val_conditions) {
   check_packages(c("grDevices", "RColorBrewer"))
-  
+
   if (n_conditions <= 9) {
     color_mapping <- setNames(
-      RColorBrewer::brewer.pal(9, "Set1")[1:n_conditions],
+      brewer.pal(9, "Set1")[1:n_conditions],
       val_conditions
     )
   } else {
     # !!! Must check grDevices is installed !!!
-    pal <- grDevices::colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
+    pal <- colorRampPalette(brewer.pal(9, "Set1"))
     color_mapping <- setNames(
       pal(n_conditions),
       val_conditions

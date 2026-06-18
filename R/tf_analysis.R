@@ -11,9 +11,12 @@
 #' @param confidence_levels DoRothEA confidence levels to include (default: c("A", "B", "C"))
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return List containing TF activity scores and differential TF analysis results
+#'
+#' @importFrom viper viper
+#'
 #' @export
-
 run_tf_analysis <- function(expr_data, metadata, condition_column, group1, group2,
                            species = "mouse", confidence_levels = c("A", "B", "C"),
                            output_dir, experiment_name,fdr_threshold = 0.05, lfc_threshold = 1) {
@@ -59,140 +62,46 @@ run_tf_analysis <- function(expr_data, metadata, condition_column, group1, group
   message("Running VIPER to estimate TF activities...")
   #print(expr_z)
   #print(regulon_viper)
-  tf_activities <- viper::viper(expr_z, regulon_viper, verbose = TRUE)
+  tf_activities <- viper(expr_z, regulon_viper, verbose = TRUE)
 
   # Differential TF activity analysis
-  message("Performing differential TF activity analysis...")
+  message("\nPerforming differential TF activity analysis...")
   diff_tf_results <- analyze_differential_tf_activity(tf_activities, metadata, condition_column,
                                                      group1, group2,fdr_threshold = 0.05, lfc_threshold = 1)
 
-  # Create visualizations
-  plot_tf_volcano <- function(diff_tf_results, output_dir, experiment_name,
-                          fdr_threshold = 0.05, lfc_threshold = 1, n_labels = 20) {
 
-  if (!requireNamespace("ggplot2", quietly = TRUE) ||
-      !requireNamespace("ggrepel", quietly = TRUE)) {
-    message("Skipping TF volcano plot - required packages not available")
-    return()
+  print(head(tf_activities))
+
+  plot_tf_activity_heatmap(tf_activities, metadata, condition_column, output_dir, experiment_name)
+
+  plot_tf_volcano(diff_tf_results, output_dir, experiment_name,fdr_threshold = 0.05, lfc_threshold = 1)
+
+  plot_tf_barplot(diff_tf_results, n_tfs = 20, output_dir, experiment_name)
+
+
+  # Master regulator analysis
+  if (requireNamespace("viper", quietly = TRUE)) {
+    master_regulators <- run_master_regulator_analysis(diff_tf_results, regulon_viper, output_dir, experiment_name)
+  } else {
+    master_regulators <- NULL
   }
 
-  # Prepare data
-  plot_data <- diff_tf_results
-  plot_data$neg_log10_padj <- -log10(plot_data$adj.P.Val)
+  # Save results
+  save_tf_results(tf_activities, diff_tf_results, master_regulators, output_dir, experiment_name)
 
-  # Select top TFs to label
-  plot_data$label <- ""
-  top_activated <- head(plot_data[plot_data$Regulation == "Activated", ], n_labels/2)
-  top_repressed <- head(plot_data[plot_data$Regulation == "Repressed", ], n_labels/2)
+  message("Transcription factor analysis completed!")
 
-  plot_data$label[plot_data$TF %in% c(top_activated$TF, top_repressed$TF)] <-
-    plot_data$TF[plot_data$TF %in% c(top_activated$TF, top_repressed$TF)]
-
-  # Create plot
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = logFC, y = neg_log10_padj, color = Regulation)) +
-    ggplot2::geom_point(alpha = 0.7, size = 2) +
-    ggplot2::scale_color_manual(values = c(
-      "Activated" = "#E31A1C",
-      "Repressed" = "#1F78B4",
-      "Not Significant" = "grey70"
-    )) +
-    ggplot2::geom_vline(xintercept = c(-lfc_threshold, lfc_threshold),
-                       linetype = "dashed", color = "grey40") +
-    ggplot2::geom_hline(yintercept = -log10(fdr_threshold),
-                       linetype = "dashed", color = "grey40") +
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::labs(
-      title = "Transcription Factor Activity Changes",
-      x = "Log2 Fold Change (TF Activity)",
-      y = "-log10(Adjusted P-value)",
-      color = "Regulation"
-    ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
-      legend.position = "bottom"
-    )
-
-  # Add labels if ggrepel is available
-  if (any(plot_data$label != "")) {
-    p <- p + ggrepel::geom_text_repel(
-      ggplot2::aes(label = label),
-      max.overlaps = 20,
-      box.padding = 0.5,
-      point.padding = 0.3,
-      segment.color = "grey50",
-      size = 3
-    )
-  }
-
-  # Save plot
-  output_file <- file.path(output_dir, paste0(experiment_name, "_TF_volcano_plot.pdf"))
-  ggplot2::ggsave(output_file, p, width = 10, height = 8)
-
-  message("TF volcano plot saved to: ", output_file)
-  return(p)
+  return(list(
+    tf_activities = tf_activities,
+    differential_results = diff_tf_results,
+    master_regulators = master_regulators,
+    regulon = regulon_viper
+  ))
 }
 
-#' Plot TF Activity Barplot
-#'
-#' Creates a barplot of top differentially active transcription factors.
-#'
-#' @param diff_tf_results Differential TF analysis results
-#' @param n_tfs Number of top TFs to show (default: 20)
-#' @param output_dir Output directory
-#' @param experiment_name Experiment name
-#' @return ggplot object
-#' @keywords internal
-plot_tf_barplot <- function(diff_tf_results, n_tfs = 20, output_dir, experiment_name) {
 
-  if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    message("Skipping TF barplot - ggplot2 not available")
-    return()
-  }
 
-  # Select top TFs by absolute log fold change and significance
-  sig_tfs <- diff_tf_results[diff_tf_results$adj.P.Val < 0.05, ]
 
-  if (nrow(sig_tfs) == 0) {
-    message("No significant TFs found for barplot")
-    return()
-  }
-
-  # Get top activated and repressed
-  n_each <- min(n_tfs/2, nrow(sig_tfs))
-  top_activated <- head(sig_tfs[sig_tfs$logFC > 0, ], n_each)
-  top_repressed <- head(sig_tfs[sig_tfs$logFC < 0, ], n_each)
-
-  plot_data <- rbind(top_activated, top_repressed)
-  plot_data$TF <- factor(plot_data$TF, levels = plot_data$TF[order(plot_data$logFC)])
-
-  # Create plot
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = TF, y = logFC, fill = Regulation)) +
-    ggplot2::geom_col(width = 0.7) +
-    ggplot2::scale_fill_manual(values = c(
-      "Activated" = "#E31A1C",
-      "Repressed" = "#1F78B4"
-    )) +
-    ggplot2::coord_flip() +
-    ggplot2::theme_minimal(base_size = 11) +
-    ggplot2::labs(
-      title = "Top Differentially Active Transcription Factors",
-      x = "Transcription Factor",
-      y = "Log2 Fold Change (TF Activity)",
-      fill = "Regulation"
-    ) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
-      legend.position = "bottom"
-    ) +
-    ggplot2::geom_hline(yintercept = 0, linetype = "dashed", color = "grey50")
-
-  # Save plot
-  output_file <- file.path(output_dir, paste0(experiment_name, "_TF_barplot.pdf"))
-  ggplot2::ggsave(output_file, p, width = 8, height = 6)
-
-  message("TF barplot saved to: ", output_file)
-  return(p)
-}
 
 #' Run Master Regulator Analysis
 #'
@@ -202,8 +111,13 @@ plot_tf_barplot <- function(diff_tf_results, n_tfs = 20, output_dir, experiment_
 #' @param regulon_viper VIPER-formatted regulon
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return Master regulator analysis results
+#'
 #' @keywords internal
+#'
+#' @importFrom viper msviper
+#' @import grDevices
 run_master_regulator_analysis <- function(diff_tf_results, regulon_viper, output_dir, experiment_name) {
 
   if (!requireNamespace("viper", quietly = TRUE)) {
@@ -219,8 +133,8 @@ run_master_regulator_analysis <- function(diff_tf_results, regulon_viper, output
 
   # Run msviper
   tryCatch({
-    mra_results <- viper::msviper(
-      signature = tf_stats,
+    mra_results <- msviper(
+      ges = tf_stats,
       regulon = regulon_viper,
       minsize = 10,
       ges.filter = FALSE
@@ -245,6 +159,11 @@ run_master_regulator_analysis <- function(diff_tf_results, regulon_viper, output
   })
 }
 
+
+
+
+
+
 #' Save TF Analysis Results
 #'
 #' Saves all transcription factor analysis results to files.
@@ -254,8 +173,12 @@ run_master_regulator_analysis <- function(diff_tf_results, regulon_viper, output
 #' @param master_regulators Master regulator analysis results
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (invisible)
+#'
 #' @keywords internal
+#'
+#' @importFrom utils write.table
 save_tf_results <- function(tf_activities, diff_tf_results, master_regulators, output_dir, experiment_name) {
 
   # Save TF activities
@@ -291,6 +214,12 @@ save_tf_results <- function(tf_activities, diff_tf_results, master_regulators, o
   invisible()
 }
 
+
+
+
+
+
+
 #' Create TF Network Visualization
 #'
 #' Creates a network visualization of top transcription factors and their targets.
@@ -300,9 +229,16 @@ save_tf_results <- function(tf_activities, diff_tf_results, master_regulators, o
 #' @param n_tfs Number of top TFs to include (default: 10)
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
+#'
+#' @import ggplot2
+#' @import ggraph
+#' @importFrom dplyr group_by slice_head ungroup
+#' @importFrom igraph graph_from_data_frame V
+#' @importFrom utils head
+#'
 #' @export
-
 create_tf_network_plot <- function(diff_tf_results, regulon, n_tfs = 10, output_dir, experiment_name) {
 
   if (!requireNamespace("igraph", quietly = TRUE) ||
@@ -326,46 +262,46 @@ create_tf_network_plot <- function(diff_tf_results, regulon, n_tfs = 10, output_
   # Limit targets per TF for visualization
   max_targets_per_tf <- 10
   network_regulon <- network_regulon %>%
-    dplyr::group_by(tf) %>%
-    dplyr::slice_head(n = max_targets_per_tf) %>%
-    dplyr::ungroup()
+    group_by(.data$tf) %>%
+    slice_head(n = max_targets_per_tf) %>%
+    ungroup()
 
   # Create igraph object
   edges <- network_regulon[, c("tf", "target", "mor")]
-  graph <- igraph::graph_from_data_frame(edges, directed = TRUE)
+  graph <- graph_from_data_frame(edges, directed = TRUE)
 
   # Add node attributes
-  igraph::V(graph)$type <- ifelse(igraph::V(graph)$name %in% top_tfs$TF, "TF", "Target")
-  igraph::V(graph)$logFC <- NA
-  igraph::V(graph)$logFC[match(top_tfs$TF, igraph::V(graph)$name)] <- top_tfs$logFC
+  V(graph)$type <- ifelse(V(graph)$name %in% top_tfs$TF, "TF", "Target")
+  V(graph)$logFC <- NA
+  V(graph)$logFC[match(top_tfs$TF, V(graph)$name)] <- top_tfs$logFC
 
   # Create plot
   output_file <- file.path(output_dir, paste0(experiment_name, "_TF_network.pdf"))
 
   pdf(output_file, width = 12, height = 10)
 
-  p <- ggraph::ggraph(graph, layout = "stress") +
-    ggraph::geom_edge_link(ggplot2::aes(color = factor(mor)),
-                          arrow = ggplot2::arrow(length = ggplot2::unit(2, "mm")),
-                          alpha = 0.6) +
-    ggraph::geom_node_point(ggplot2::aes(color = type, size = type)) +
-    ggraph::geom_node_text(ggplot2::aes(label = name), repel = TRUE, size = 3) +
-    ggplot2::scale_color_manual(
+  p <- ggraph(graph, layout = "stress") +
+    geom_edge_link(aes(color = factor(.data$mor)),
+                   arrow = arrow(length = unit(2, "mm")),
+                   alpha = 0.6) +
+    geom_node_point(aes(color = .data$type, size = .data$type)) +
+    geom_node_text(aes(label = .data$name), repel = TRUE, size = 3) +
+    scale_color_manual(
       name = "Node Type",
       values = c("TF" = "#E31A1C", "Target" = "#377EB8")
     ) +
-    ggplot2::scale_size_manual(
+    scale_size_manual(
       name = "Node Type",
       values = c("TF" = 4, "Target" = 2)
     ) +
-    ggraph::scale_edge_color_manual(
+    scale_edge_color_manual(
       name = "Regulation",
       values = c("1" = "#E31A1C", "-1" = "#1F78B4"),
       labels = c("Activation", "Repression")
     ) +
-    ggplot2::labs(title = paste("Transcription Factor Network -", experiment_name)) +
-    ggraph::theme_graph() +
-    ggplot2::theme(
+    labs(title = paste("Transcription Factor Network -", experiment_name)) +
+    theme_graph() +
+    theme(
       plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
       legend.position = "bottom"
     )
@@ -375,34 +311,12 @@ create_tf_network_plot <- function(diff_tf_results, regulon, n_tfs = 10, output_
 
   message("TF network plot saved to: ", output_file)
 }
-  print(head(tf_activities))
-
-  plot_tf_activity_heatmap(tf_activities, metadata, condition_column, output_dir, experiment_name)
-
-  plot_tf_volcano(diff_tf_results, output_dir, experiment_name,fdr_threshold = 0.05, lfc_threshold = 1)
-
-  plot_tf_barplot(diff_tf_results, n_tfs = 20, output_dir, experiment_name)
 
 
-  # Master regulator analysis
-  if (requireNamespace("viper", quietly = TRUE)) {
-    master_regulators <- run_master_regulator_analysis(diff_tf_results, regulon_viper, output_dir, experiment_name)
-  } else {
-    master_regulators <- NULL
-  }
 
-  # Save results
-  save_tf_results(tf_activities, diff_tf_results, master_regulators, output_dir, experiment_name)
 
-  message("Transcription factor analysis completed!")
 
-  return(list(
-    tf_activities = tf_activities,
-    differential_results = diff_tf_results,
-    master_regulators = master_regulators,
-    regulon = regulon_viper
-  ))
-}
+
 
 #' Load DoRothEA Regulons
 #'
@@ -410,8 +324,12 @@ create_tf_network_plot <- function(diff_tf_results, regulon, n_tfs = 10, output_
 #'
 #' @param species Species ("mouse" or "human")
 #' @param confidence_levels Confidence levels to include
+#'
 #' @return DoRothEA regulon data frame
+#'
 #' @keywords internal
+#'
+#' @importFrom utils data
 load_dorothea_regulons <- function(species, confidence_levels) {
 
   if (!requireNamespace("dorothea", quietly = TRUE)) {
@@ -419,10 +337,10 @@ load_dorothea_regulons <- function(species, confidence_levels) {
   }
 
   if (species == "mouse") {
-    data("dorothea_mm", package = "dorothea")
+    data("dorothea_mm", package = "dorothea", envir = environment())
     regulon <- dorothea_mm
   } else if (species == "human") {
-    data("dorothea_hs", package = "dorothea")
+    data("dorothea_hs", package = "dorothea", envir = environment())
     regulon <- dorothea_hs
   } else {
     stop("Species must be 'mouse' or 'human'")
@@ -437,14 +355,22 @@ load_dorothea_regulons <- function(species, confidence_levels) {
   return(regulon)
 }
 
+
+
+
 #' Map Regulons to ENSEMBL IDs
 #'
 #' Maps gene symbols in regulons to ENSEMBL IDs using biomaRt.
 #'
 #' @param regulon DoRothEA regulon data frame
 #' @param species Species ("mouse" or "human")
+#'
 #' @return Regulon with ENSEMBL IDs
+#'
 #' @keywords internal
+#'
+#' @importFrom biomaRt useMart getBM
+#' @importFrom stats setNames
 map_regulons_to_ensembl <- function(regulon, species) {
 
   if (!requireNamespace("biomaRt", quietly = TRUE)) {
@@ -454,16 +380,16 @@ map_regulons_to_ensembl <- function(regulon, species) {
 
   # Set up biomaRt
   if (species == "mouse") {
-    mart <- biomaRt::useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+    mart <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
     symbol_attr <- "mgi_symbol"
   } else {
-    mart <- biomaRt::useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+    mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
     symbol_attr <- "hgnc_symbol"
   }
 
   # Map TF symbols to ENSEMBL
   tf_symbols <- unique(regulon$tf)
-  tf_mapping <- biomaRt::getBM(
+  tf_mapping <- getBM(
     attributes = c(symbol_attr, "ensembl_gene_id"),
     filters = symbol_attr,
     values = tf_symbols,
@@ -474,7 +400,7 @@ map_regulons_to_ensembl <- function(regulon, species) {
 
   # Map target symbols to ENSEMBL
   target_symbols <- unique(regulon$target)
-  target_mapping <- biomaRt::getBM(
+  target_mapping <- getBM(
     attributes = c(symbol_attr, "ensembl_gene_id"),
     filters = symbol_attr,
     values = target_symbols,
@@ -495,13 +421,22 @@ map_regulons_to_ensembl <- function(regulon, species) {
   return(regulon)
 }
 
+
+
+
 #' Convert to VIPER Format
 #'
 #' Converts DoRothEA regulons to VIPER format.
 #'
 #' @param regulon Regulon data frame with ENSEMBL IDs
+#'
 #' @return VIPER-formatted regulon list
+#'
 #' @keywords internal
+#'
+#' @importFrom dplyr group_by summarise mutate
+#' @importFrom purrr map2
+#' @importFrom stats setNames
 convert_to_viper_format <- function(regulon) {
   if (!requireNamespace("dplyr", quietly = TRUE)) {
     stop("Package 'dplyr' is required")
@@ -509,14 +444,14 @@ convert_to_viper_format <- function(regulon) {
 
   # Group by TF and create VIPER format using Ensembl IDs
   regulon_viper <- regulon %>%
-    dplyr::group_by(tf) %>%
-    dplyr::summarise(
-      tfmode = list(setNames(mor, target_ensembl)),        # <-- use target_ensembl
-      likelihood = list(setNames(rep(1, length(target_ensembl)), target_ensembl)), # <-- use target_ensembl
+    group_by(.data$tf) %>%
+    summarise(
+      tfmode = list(setNames(.data$mor, .data$target_ensembl)),        # <-- use target_ensembl
+      likelihood = list(setNames(rep(1, length(.data$target_ensembl)), .data$target_ensembl)), # <-- use target_ensembl
       .groups = "drop"
     ) %>%
-    dplyr::mutate(
-      tf_regulon = purrr::map2(tfmode, likelihood, ~ list(tfmode = .x, likelihood = .y))
+    mutate(
+      tf_regulon = map2(tfmode, likelihood, ~ list(tfmode = .x, likelihood = .y))
     ) %>%
     { setNames(.$tf_regulon, .$tf) }
 
@@ -524,6 +459,9 @@ convert_to_viper_format <- function(regulon) {
 
   return(regulon_viper)
 }
+
+
+
 
 #' Analyze Differential TF Activity
 #'
@@ -534,8 +472,13 @@ convert_to_viper_format <- function(regulon) {
 #' @param condition_column Condition column name
 #' @param group1 Group 1 name
 #' @param group2 Group 2 name
+#'
 #' @return Differential TF analysis results
+#'
 #' @keywords internal
+#'
+#' @importFrom limma lmFit eBayes topTable
+#' @importFrom stats model.matrix
 analyze_differential_tf_activity <- function(tf_activities, metadata, condition_column, group1, group2,fdr_threshold = 0.05, lfc_threshold = 1) {
 
   if (!requireNamespace("limma", quietly = TRUE)) {
@@ -561,11 +504,11 @@ analyze_differential_tf_activity <- function(tf_activities, metadata, condition_
   colnames(design) <- c("Intercept", paste0(group1, "_vs_", group2))
 
   # Fit model
-  fit <- limma::lmFit(tf_activities_sub, design)
-  fit <- limma::eBayes(fit)
+  fit <- lmFit(tf_activities_sub, design)
+  fit <- eBayes(fit)
 
   # Extract results
-  results <- limma::topTable(fit, coef = 2, number = Inf)
+  results <- topTable(fit, coef = 2, number = Inf)
   results$TF <- rownames(results)
 
   # Add significance labels
@@ -579,6 +522,173 @@ analyze_differential_tf_activity <- function(tf_activities, metadata, condition_
   return(results)
 }
 
+
+
+
+
+
+
+#' Create Volcano Plot for TF activity
+#'
+#' @param diff_tf_results the results of TF differential activity analysis
+#' @param output_dir path to the output directory
+#' @param experiment_name name of the experiment
+#' @param fdr_threshold FDR threshold (default: 0.05)
+#' @param lfc_threshold log-Fold-Change threshold (default: 1)
+#' @param n_labels number of labels to be shown (default: 20)
+#'
+#' @return a volcano plot
+#'
+#' @import ggplot2
+#' @importFrom ggrepel geom_text_repel
+#' @importFrom utils head
+#'
+#' @export
+plot_tf_volcano <- function(diff_tf_results, output_dir, experiment_name,
+                            fdr_threshold = 0.05, lfc_threshold = 1, n_labels = 20) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("ggrepel", quietly = TRUE)) {
+    message("Skipping TF volcano plot - required packages not available")
+    return()
+  }
+
+  # Prepare data
+  plot_data <- diff_tf_results
+  plot_data$neg_log10_padj <- -log10(plot_data$adj.P.Val)
+
+  # Select top TFs to label
+  plot_data$label <- ""
+  top_activated <- head(plot_data[plot_data$Regulation == "Activated", ], n_labels/2)
+  top_repressed <- head(plot_data[plot_data$Regulation == "Repressed", ], n_labels/2)
+
+  plot_data$label[plot_data$TF %in% c(top_activated$TF, top_repressed$TF)] <-
+    plot_data$TF[plot_data$TF %in% c(top_activated$TF, top_repressed$TF)]
+
+  # Create plot
+  p <- ggplot(plot_data, ggplot2::aes(x = .data$logFC, y = .data$neg_log10_padj, color = .data$Regulation)) +
+    geom_point(alpha = 0.7, size = 2) +
+    scale_color_manual(values = c(
+      "Activated" = "#E31A1C",
+      "Repressed" = "#1F78B4",
+      "Not Significant" = "grey70"
+    )) +
+    geom_vline(xintercept = c(-lfc_threshold, lfc_threshold),
+               linetype = "dashed", color = "grey40") +
+    geom_hline(yintercept = -log10(fdr_threshold),
+               linetype = "dashed", color = "grey40") +
+    theme_minimal(base_size = 12) +
+    labs(
+      title = "Transcription Factor Activity Changes",
+      x = "Log2 Fold Change (TF Activity)",
+      y = "-log10(Adjusted P-value)",
+      color = "Regulation"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      legend.position = "bottom"
+    )
+
+  # Add labels if ggrepel is available
+  if (any(plot_data$label != "")) {
+    p <- p + geom_text_repel(
+      aes(label = .data$label),
+      max.overlaps = 20,
+      box.padding = 0.5,
+      point.padding = 0.3,
+      segment.color = "grey50",
+      size = 3
+    )
+  }
+
+  # Save plot
+  output_file <- file.path(output_dir, paste0(experiment_name, "_TF_volcano_plot.pdf"))
+  ggsave(output_file, p, width = 10, height = 8)
+
+  message("TF volcano plot saved to: ", output_file)
+  return(p)
+}
+
+
+
+
+
+
+#' Plot TF Activity Barplot
+#'
+#' Creates a barplot of top differentially active transcription factors.
+#'
+#' @param diff_tf_results Differential TF analysis results
+#' @param n_tfs Number of top TFs to show (default: 20)
+#' @param output_dir Output directory
+#' @param experiment_name Experiment name
+#'
+#' @return ggplot object
+#'
+#' @keywords internal
+#'
+#' @import ggplot2
+plot_tf_barplot <- function(diff_tf_results, n_tfs = 20, output_dir, experiment_name) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    message("Skipping TF barplot - ggplot2 not available")
+    return()
+  }
+
+
+  # Select top TFs by absolute log fold change and significance
+  sig_tfs <- diff_tf_results[diff_tf_results$adj.P.Val < 0.05, ]
+
+  if (nrow(sig_tfs) == 0) {
+    message("No significant TFs found for barplot")
+    return()
+  }
+
+  # Get top activated and repressed
+  n_each <- min(n_tfs/2, nrow(sig_tfs))
+  top_activated <- head(sig_tfs[sig_tfs$logFC > 0, ], n_each)
+  top_repressed <- head(sig_tfs[sig_tfs$logFC < 0, ], n_each)
+
+  plot_data <- rbind(top_activated, top_repressed)
+  plot_data$TF <- factor(plot_data$TF, levels = plot_data$TF[order(plot_data$logFC)])
+
+  # Create plot
+  p <- ggplot(plot_data, aes(x = .data$TF, y = .data$logFC, fill = .data$Regulation)) +
+    geom_col(width = 0.7) +
+    scale_fill_manual(values = c(
+      "Activated" = "#E31A1C",
+      "Repressed" = "#1F78B4"
+    )) +
+    coord_flip() +
+    theme_minimal(base_size = 11) +
+    labs(
+      title = "Top Differentially Active Transcription Factors",
+      x = "Transcription Factor",
+      y = "Log2 Fold Change (TF Activity)",
+      fill = "Regulation"
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      legend.position = "bottom"
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50")
+
+  # Save plot
+  output_file <- file.path(output_dir, paste0(experiment_name, "_TF_barplot.pdf"))
+  ggsave(output_file, p, width = 8, height = 6)
+
+  message("TF barplot saved to: ", output_file)
+  return(p)
+}
+
+
+
+
+
+
+
+
+
 #' Plot TF Activity Heatmap
 #'
 #' Creates a heatmap of transcription factor activities.
@@ -589,8 +699,15 @@ analyze_differential_tf_activity <- function(tf_activities, metadata, condition_
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
 #' @param n_top_tfs Number of most variable TFs to show (default: 50)
+#'
 #' @return None (creates plot)
+#'
 #' @keywords internal
+#'
+#' @import ComplexHeatmap
+#' @importFrom circlize colorRamp2
+#' @importFrom grid gpar
+#' @import grDevices
 plot_tf_activity_heatmap <- function(tf_activities,
                                      metadata,
                                      condition_column,
@@ -631,21 +748,13 @@ plot_tf_activity_heatmap <- function(tf_activities,
     stop("No non-NA conditions found in metadata for column: ", condition_column)
   }
 
-  if (n_conds == 1) {
-    # Single condition – just pick one color
-    cond_cols <- "#E41A1C"
-  } else if (n_conds <= 9) {
-    # Brewer needs n >= 3, so take first n_conds colors
-    cond_cols <- RColorBrewer::brewer.pal(max(n_conds, 3), "Set1")[seq_len(n_conds)]
-  } else {
-    cond_cols <- circlize::rand_color(n_conds)
-  }
+  col_colors <- get_palette(n_conditions = n_conds,
+                           val_conditions = conds)
 
-  col_colors <- setNames(cond_cols, conds)
   print(col_colors)
 
   # Column annotation (NA conditions will just have no color)
-  ha <- ComplexHeatmap::HeatmapAnnotation(
+  ha <- HeatmapAnnotation(
     Condition = factor(cond_vec, levels = conds),
     col = list(Condition = col_colors)
   )
@@ -655,16 +764,16 @@ plot_tf_activity_heatmap <- function(tf_activities,
   output_file <- file.path(output_dir, paste0(experiment_name, "_TF_activity_heatmap.pdf"))
 
   pdf(output_file, width = 10, height = 12)
-  ht <- ComplexHeatmap::Heatmap(
+  ht <- Heatmap(
     tf_scaled,
     name = "TF Activity\n(Z-score)",
-    col = circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
+    col = colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
     top_annotation = ha,
     show_row_names = TRUE,
     show_column_names = TRUE,
     cluster_rows = TRUE,
     cluster_columns = TRUE,
-    row_names_gp = grid::gpar(fontsize = 8),
+    row_names_gp = gpar(fontsize = 8),
     column_title = paste("Top", n_top_tfs, "Variable Transcription Factors")
   )
   print(ht)
@@ -672,5 +781,3 @@ plot_tf_activity_heatmap <- function(tf_activities,
 
   message("TF activity heatmap saved to: ", output_file)
 }
-
-

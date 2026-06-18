@@ -22,25 +22,8 @@ create_lincs_connectivity_plot(
 }
 \value{
 ggplot object
-
-ggplot object
 }
 \description{
-Creates a plot showing connectivity scores for top compounds.
+Creates a bar plot showing connectivity scores for top compounds.
 }
-\keyword{Connectivity}
-\keyword{Create}
-\keyword{Creates}
-\keyword{LINCS}
-\keyword{Plot}
-\keyword{Score}
-\keyword{a}
-\keyword{bar}
-\keyword{compounds.}
-\keyword{connectivity}
-\keyword{for}
 \keyword{internal}
-\keyword{plot}
-\keyword{scores}
-\keyword{showing}
-\keyword{top}

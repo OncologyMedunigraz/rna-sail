@@ -1,3 +1,290 @@
+#' Harmonize Deconvolution outputs
+#'
+#' For each tool it provides common labels and aggregates fine types into coarse ones whenever possible
+#'
+#' @param deconvo_output the output of the deconvolution method
+#' @param tool_name the tool name (CIBERSORTx, xCell, EPIC-BRef, EPIC-TRef, quanTIseq, MCPC)
+#'
+#' @return an harmonized data.frame
+#'
+#' @export
+harmonize_deconvolution <- function(deconvo_output, tool_name) {
+  # Arbitrarily decided to have samples as rows and cell types as cols
+  # Sample IDs are rownames
+
+  if (grepl("CIBERSORTx", tool_name)) {
+    rownames(deconvo_output) <- deconvo_output$Mixture
+    n <- ncol(deconvo_output)
+    polished_df <- deconvo_output[ , -c(1, (n-3):n)]
+
+
+    colnames(polished_df)[9] <- "T.cells.regulatory"
+    # B cells = naive + memory + plasma
+    polished_df$B.cells <- polished_df$B.cells.naive + polished_df$B.cells.memory + polished_df$Plasma.cells
+
+    # NK, Mast, Dendritic, and T.cells.CD4.memory = activated + resting
+    polished_df$NK.cells <- polished_df$NK.cells.resting + polished_df$NK.cells.activated
+    polished_df$Mast.cells <- polished_df$Mast.cells.resting + polished_df$Mast.cells.activated
+    polished_df$Dendritic.cells <- polished_df$Dendritic.cells.resting + polished_df$Dendritic.cells.activated
+    polished_df$T.cells.CD4.memory <- polished_df$T.cells.CD4.memory.resting + polished_df$T.cells.CD4.memory.activated
+
+
+    #CD4+ T cells = CD4.memory + CD4.naive + Tfh + Treg
+    polished_df$T.cells.CD4 <- polished_df$T.cells.CD4.memory + polished_df$T.cells.CD4.naive +
+      polished_df$T.cells.follicular.helper + polished_df$T.cells.regulatory
+
+    # T-cells
+    polished_df$T.cells = polished_df$T.cells.CD4 + polished_df$T.cells.CD8 +
+      polished_df$T.cells.gamma.delta
+
+
+    #Lymphocytes = T.cells + B.cells + NK.cells
+    polished_df$Lymphocytes = polished_df$B.cells + polished_df$NK.cells +
+      polished_df$T.cells
+
+
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+
+
+  if (grepl("xCell", tool_name)) {
+    polished_df <- as.data.frame(t(deconvo_output))
+
+    new_names <- c("DC" = "Dendritic.cells",
+                   "aDC" = "Dendritic.cells.activated",
+                   "iDC" = "Dendritic.cells.immature",
+                   "cDC" = "Dendritic.cells.conventional",
+                   "pDC" = "Dendritic.cells.plasmacytoid",
+                   "B-cells" = "B.cells",
+                   "pro B-cells" = "B.cells.pro",
+                   "Class-switched memory B-cells" = "B.cells.memory.class-switched",
+                   "Memory B-cells" = "B.cells.memory",
+                   "naive B-cells" = "B.cells.naive",
+                   "NKT" = "NK.T.cells",
+                   "CD4+ memory T-cells" = "T.cells.CD4.memory",
+                   "CD4+ naive T-cells" = "T.cells.CD4.naive",
+                   "CD4+ T-cells" = "T.cells.CD4",
+                   "CD4+ Tcm" = "T.cells.CD4.central.memory",
+                   "CD4+ Tem" = "T.cells.CD4.effector.memory",
+                   "CD8+ naive T-cells" = "T.cells.CD8.naive",
+                   "CD8+ T-cells" = "T.cells.CD8",
+                   "CD8+ Tcm" = "T.cells.CD8.central.memory",
+                   "CD8+ Tem" = "T.cells.CD8.effector.memory",
+                   "Tgd cells" = "T.cells.gamma.delta",
+                   "Tregs" = "T.cells.regulatory",
+                   "ly Endothelial cells" = "Endothelial.cells.lymphatic",
+                   "mv Endothelial cells" = "Endothelial.cells.microvascular",
+                   "CLP" = "Progenitor.common.lymphoid",
+                   "CMP" = "Progenitor.common.myeloid",
+                   "GMP" = "Progenitor.granulocyte.monocyte",
+                   "HSC" = "Hematopoietic.stem.cells",
+                   "MEP" = "Progenitor.Megakaryocyte.Erythroid",
+                   "MPP" = "Progenitor.multipotent",
+                   "MSC" = "Mesenchymal.stem.cells"
+    )
+
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+    colnames(polished_df) <- gsub(" ", ".", colnames(polished_df))
+
+
+    # T.cells
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8 +
+      polished_df$T.cells.gamma.delta
+
+    # Lymphocytes
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells +
+      polished_df$NK.cells + polished_df$NK.T.cells
+
+    n <- ncol(polished_df)
+    polished_df <- polished_df[ , c(sort(colnames(polished_df)[-c((n-2):n)]),
+                                    colnames(polished_df)[(n-2):n])
+    ]
+  }
+
+
+  if (grepl("EPIC-TRef", tool_name)) {
+    polished_df <- as.data.frame(deconvo_output$cellFractions)
+
+    colnames(polished_df) <- c("B.cells",
+                               "Fibroblasts.cancer.associated",
+                               "T.cells.CD4",
+                               "T.cells.CD8",
+                               "Endothelial.cells",
+                               "Macrophages",
+                               "NK.cells",
+                               "Other.cells")
+
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8
+
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells
+    polished_df$NK.cells
+
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+
+
+  if (grepl("EPIC-BRef", tool_name)) {
+    polished_df <- as.data.frame(deconvo_output$cellFractions)
+
+    colnames(polished_df) <- c("B.cells",
+                               "T.cells.CD4",
+                               "T.cells.CD8",
+                               "Monocytes",
+                               "Neutrophils",
+                               "NK.cells",
+                               "Other.cells")
+
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8
+
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells
+    polished_df$NK.cells
+
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+
+
+  if (grepl("quanTIseq", tool_name)) {
+    polished_df <- deconvo_output[,-1]
+
+    new_names <- c("Tregs" = "T.cells.regulatory",
+                   "Other" = "Other.cells")
+
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+
+
+    # T.cells = CD4 + CD8
+    polished_df$T.cells <- polished_df$T.cells.CD4 + polished_df$T.cells.CD8 +
+      polished_df$T.cells.regulatory
+
+    # Lymphocytes = B.cells + T.cells + NK.cells
+    polished_df$Lymphocytes <- polished_df$B.cells + polished_df$T.cells +
+      polished_df$NK.cells
+
+
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+
+
+  if (grepl("MCPC", tool_name)) {
+    polished_df <- as.data.frame(t(deconvo_output))
+
+    new_names <- c("CD8 T cells" = "T.cells.CD8",
+                   "Cytotoxic lymphocytes" = "Lymphocytes.cytotoxic",
+                   "Myeloid dendritic cells" = "Dendritic.cells.conventional")
+
+    colnames(polished_df) <- ifelse(colnames(polished_df) %in% names(new_names),
+                                    new_names[colnames(polished_df)], colnames(polished_df))
+    colnames(polished_df) <- gsub(" ", ".", colnames(polished_df))
+
+
+    polished_df <- polished_df[ , sort(colnames(polished_df))]
+  }
+
+  return(as.data.frame(t(polished_df)))
+}
+
+
+
+#' Run all human Deconvolution Tools
+#'
+#' Performs Immune Deconvolution using all the listed tools
+#'
+#' @param exprMatrix a matrix with raw TPM (not log-transformed), and gene symbols as rownames
+#' @param tools a vector of tool names to be used (all, xCell, EPIC-TRef, EPIC-BRef, quanTIseq, MCPC)
+#' @param output_dir the path where to save the results
+#' @param experiment_name the name to give to the results
+#'
+#' @return a named list with the deconvolution output per tool
+#'
+#' @import xCell
+#' @import EPIC
+#' @import quantiseqr
+#' @import MCPcounter
+#'
+#' @export
+#'
+run_tools <- function(exprMatrix, tools = "all", output_dir = NULL, experiment_name = NULL) {
+
+  message("Stripping ENSEMBL IDs from rownames")
+  rownames(exprMatrix) <- sapply(rownames(exprMatrix), function(x) strsplit(x,split="_")[[1]][1])
+
+  dup_genes <- rownames(exprMatrix)[duplicated(rownames(exprMatrix))]
+
+  if (length(dup_genes)>0) {
+    message("Removing the following duplicated genes prior to deconvolution:")
+    print(as.vector(dup_genes))
+
+    exprMatrix <- exprMatrix[!rownames(exprMatrix) %in% dup_genes,]
+  }
+
+  if (max(exprMatrix) < 25) {
+    message("Warning: the expression matrix looks like log\u002Dtransformed, therefore the transformation will be reversed")
+    exprMatrix <- 2^exprMatrix - 1
+  }
+
+  results <- list()
+
+  if (tools == "all" || "xCell" %in% tools) {
+    data("xCell.data", package = "xCell", envir = environment())
+    results[["xCell"]] <- xCellAnalysis(expr = exprMatrix,
+                                        signatures = xCell.data$signatures,
+                                        genes = xCell.data$genes,
+                                        spill = xCell.data$spill)
+  }
+
+  if (tools == "all" || "EPIC-TRef" %in% tools) {
+    results[["EPIC-TRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "TRef")
+    # package referenced because of some errors with the namespace
+  }
+
+  if (tools == "all" || "EPIC-BRef" %in% tools) {
+    results[["EPIC-BRef"]] <- EPIC::EPIC(bulk = exprMatrix, reference = "BRef")
+  }
+
+  if (tools == "all" || "quanTIseq" %in% tools) {
+    results[["quanTIseq"]] <- run_quantiseq(
+      expression_data = exprMatrix,
+      signature_matrix = "TIL10",
+      is_arraydata = FALSE,          # RNA-seq, not microarray
+      is_tumordata = TRUE,
+      scale_mRNA = TRUE
+    )
+  }
+
+  if (tools == "all" || "MCPC" %in% tools) {
+    results[["MCPC"]] <- MCPcounter.estimate(expression = exprMatrix, featuresType = "HUGO_symbols")
+  }
+
+
+  for (name in names(results)) {
+    results[[name]] <- harmonize_deconvolution(deconvo_output = results[[name]],
+                                               tool_name = name)
+
+    if (!is.null(output_dir)) {
+      result_with_samples <- cbind(cell.type = rownames(results[[name]]),
+                                   results[[name]])
+      create_output_dir(output_dir)
+      write.table(
+        result_with_samples,
+        file = file.path(output_dir, paste(experiment_name, name, "scores.tsv", sep="_")),
+        sep = "\t",
+        quote = FALSE,
+        row.names = FALSE
+      )
+    }
+
+  }
+
+  return(results)
+}
+
+
 #' Run Immune Cell Deconvolution Analysis
 #'
 #' Performs immune cell deconvolution using multiple methods including mMCPcounter for mouse data.
@@ -6,40 +293,47 @@
 #' @param metadata Sample metadata
 #' @param condition_column Column name for condition comparison
 #' @param species Species ("mouse" or "human", default: "mouse")
-#' @param method Deconvolution method ("mMCPcounter", "MCPcounter", or "all")
+#' @param method Deconvolution method ("xCell", "MCPC"default: "all")
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
-#' @return List containing immune cell scores and analysis results
+#'
+#' @return List containing immune cell scores (cell type x sample) and analysis results
+#'
 #' @export
 run_immune_deconvolution <- function(expr_data, metadata, condition_column, species = "mouse",
-                                   method = "mMCPcounter", output_dir, experiment_name) {
+                                     output_dir, experiment_name,
+                                     method = c("all", "xCell", "MCPC", "EPIC-BRef", "EPIC-TRef", "quanTIseq")
+                                     ){
+
+  method <- match.arg(method)
 
   create_output_dir(output_dir)
   message("Starting immune cell deconvolution analysis...")
 
   # Run deconvolution based on method
-  if (method == "mMCPcounter" || method == "all") {
-    if (species == "mouse") {
-      mmc_results <- run_mmcpcounter_analysis(expr_data, metadata, condition_column,
-                                            output_dir, experiment_name)
-    } else {
-      message("mMCPcounter is designed for mouse data. Consider using MCPcounter for human data.")
-      mmc_results <- NULL
-    }
-  } else {
-    mmc_results <- NULL
+  if (species == "human") {
+    imd_results <- run_tools(exprMatrix = expr_data,
+                             tools = method,
+                             output_dir = output_dir,
+                             experiment_name = experiment_name)
   }
 
-  # Add other methods here in the future (MCPcounter, xCell, etc.)
+  if (species == "mouse") {
+    # To be expanded in the future
+    imd_results <- run_mmcpcounter_analysis(expr_data, metadata, condition_column,
+                                            output_dir, experiment_name)
+  }
+
 
   # Create comprehensive visualizations
-  if (!is.null(mmc_results)) {
-    create_immune_comparison_plots(mmc_results$scores, metadata, condition_column,
+  if (!is.null(imd_results)) {
+    create_immune_comparison_plots(imd_results, metadata, condition_column,
                                  output_dir, experiment_name)
 
     # Statistical analysis
-    stats_results <- perform_immune_statistical_analysis(mmc_results$scores, metadata,
-                                                        condition_column, output_dir, experiment_name)
+    stats_results <- perform_immune_statistical_analysis(imd_results, metadata,
+                                                        condition_column, output_dir,
+                                                        experiment_name)
   } else {
     stats_results <- NULL
   }
@@ -47,7 +341,7 @@ run_immune_deconvolution <- function(expr_data, metadata, condition_column, spec
   message("Immune deconvolution analysis completed!")
 
   return(list(
-    mMCPcounter = mmc_results,
+    imd_results = imd_results,
     statistical_results = stats_results
   ))
 }
@@ -56,67 +350,82 @@ run_immune_deconvolution <- function(expr_data, metadata, condition_column, spec
 #'
 #' Compares immune cell abundances between conditions and returns a table of p-values.
 #'
-#' @param immune_scores Immune scores matrix (cell types x samples)
+#' @param immune_scores named list with Immune scores matrices (cell types x samples) per tool
 #' @param metadata Sample metadata
 #' @param condition_column Column name for condition comparison
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return Data frame with immune cell, test used, p-value, and adjusted p-value
+#'
 #' @keywords internal
+#'
+#' @import dplyr
+#' @importFrom stats kruskal.test wilcox.test p.adjust
 perform_immune_statistical_analysis <- function(immune_scores, metadata, condition_column,
                                                 output_dir, experiment_name) {
 
   if (!requireNamespace("dplyr", quietly = TRUE)) stop("Package 'dplyr' is required")
   if (!requireNamespace("tidyr", quietly = TRUE)) stop("Package 'tidyr' is required")
 
-  # Transpose immune_scores to samples x cell types
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
+  results_list <- list()
 
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
+  for (tool_name in names(immune_scores)) {
 
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
+    immune_df <- immune_scores[[tool_name]]
 
-  cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
+    # Transpose immune_scores to samples x cell types
+    immune_df <- as.data.frame(t(immune_df))
+    immune_df$Sample <- gsub("^X", "", rownames(immune_df))
 
-  results <- lapply(cell_types, function(cell) {
-    scores <- immune_df_matched[[cell]]
-    condition <- immune_df_matched[[condition_column]]
-    n_groups <- length(unique(condition))
+    # Match metadata
+    sample_order <- match(immune_df$Sample, metadata$SampleID)
+    metadata_ordered <- metadata[sample_order, ]
+    metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
 
-    if (n_groups == 2) {
-      test <- "wilcox.test"
-      test_res <- wilcox.test(scores ~ condition)
-      p_val <- test_res$p.value
-    } else {
-      test <- "kruskal.test"
-      test_res <- kruskal.test(scores ~ condition)
-      p_val <- test_res$p.value
-    }
+    immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
+    immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
+      match(immune_df_matched$Sample, metadata_ordered$SampleID)
+    ]
 
-    data.frame(
-      Cell_type = cell,
-      Test = test,
-      P_value = p_val
-    )
-  })
+    cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
 
-  results_df <- dplyr::bind_rows(results)
-  results_df$Adj_P_value <- p.adjust(results_df$P_value, method = "BH")
+    results <- lapply(cell_types, function(cell) {
+      scores <- immune_df_matched[[cell]]
+      condition <- immune_df_matched[[condition_column]]
+      n_groups <- length(unique(condition))
 
-  # Save results
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_stats.tsv"))
-  write.table(results_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE)
+      if (n_groups == 2) {
+        test <- "wilcox.test"
+        test_res <- wilcox.test(scores ~ condition)
+        p_val <- test_res$p.value
+      } else {
+        test <- "kruskal.test"
+        test_res <- kruskal.test(scores ~ condition)
+        p_val <- test_res$p.value
+      }
 
-  message("Immune statistical analysis saved to: ", output_file)
+      data.frame(
+        Cell_type = cell,
+        Test = test,
+        P_value = p_val
+      )
+    })
 
-  return(results_df)
+    results_df <- bind_rows(results)
+    results_df$Adj_P_value <- p.adjust(results_df$P_value, method = "BH")
+
+    # Save results
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name, "immune_stats.tsv", sep="_"))
+    write.table(results_df, file = output_file, sep = "\t", quote = FALSE, row.names = FALSE)
+
+    message("Immune statistical analysis saved to: ", output_file)
+
+
+    results_list[[tool_name]] <- results_df
+  }
+
+  return(results_list)
 }
 
 
@@ -130,8 +439,12 @@ perform_immune_statistical_analysis <- function(immune_scores, metadata, conditi
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return List with mMCPcounter scores and analysis
+#'
 #' @keywords internal
+#'
+#' @import mMCPcounter
 run_mmcpcounter_analysis <- function(expr_data, metadata, condition_column, output_dir, experiment_name) {
 
   if (!requireNamespace("mMCPcounter", quietly = TRUE)) {
@@ -145,7 +458,7 @@ run_mmcpcounter_analysis <- function(expr_data, metadata, condition_column, outp
   rownames(expr_symbols) <- sub(".*_", "", rownames(expr_symbols))  # Extract gene symbol part
 
   # Run mMCPcounter - expects log2(TPM) or similar
-  mmc_scores <- mMCPcounter::mMCPcounter.estimate(expr_symbols, features = "ENSEMBL.ID")
+  mmc_scores <- mMCPcounter.estimate(expr_symbols, features = "ENSEMBL.ID")
 
   # Convert to data frame and clean up
   mmc_df <- as.data.frame(t(mmc_scores))  # Transpose so samples are rows
@@ -177,7 +490,9 @@ run_mmcpcounter_analysis <- function(expr_data, metadata, condition_column, outp
 #' @param immune_df Immune scores data frame
 #' @param metadata Sample metadata
 #' @param sample_id_col Sample ID column name
+#'
 #' @return Matched metadata
+#'
 #' @keywords internal
 match_metadata_to_expression_immune <- function(immune_df, metadata, sample_id_col = "SampleID") {
 
@@ -195,12 +510,14 @@ match_metadata_to_expression_immune <- function(immune_df, metadata, sample_id_c
 #'
 #' Creates comprehensive visualization plots for immune cell deconvolution results.
 #'
-#' @param immune_scores Immune cell scores matrix (cell types x samples)
+#' @param immune_scores named list with Immune cell scores matrices (cell types x samples) per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plots)
+#'
 #' @keywords internal
 create_immune_comparison_plots <- function(immune_scores, metadata, condition_column,
                                          output_dir, experiment_name) {
@@ -222,80 +539,236 @@ create_immune_comparison_plots <- function(immune_scores, metadata, condition_co
 #'
 #' Creates boxplots comparing immune cell abundances between conditions.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune scores matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#' @param scale whether or not to scale the scores (default: TRUE)
+#'
 #' @return ggplot object
-#' @keywords internal
-create_immune_boxplots <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
+#'
+#' @import ggplot2
+#' @import tidyr
+#' @import dplyr
+#' @import RColorBrewer
+#' @import ggpubr
+#' @import grDevices
+#'
+#' @export
+create_immune_boxplots <- function(immune_scores, metadata, condition_column, output_dir, experiment_name,
+                                   scale = TRUE) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
-      !requireNamespace("tidyr", quietly = TRUE) ||
-      !requireNamespace("ggpubr", quietly = TRUE)) {
+      !requireNamespace("tidyr",   quietly = TRUE) ||
+      !requireNamespace("dplyr",   quietly = TRUE) ||
+      !requireNamespace("ggpubr",  quietly = TRUE)) {
     message("Skipping immune boxplots - required packages not available")
     return()
   }
 
-  # Prepare data
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
+  # ── 1. Combine all tools into one long data frame ──────────────────────────
 
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
+  message("Creating Boxplots")
+  immune_long <- lapply(names(immune_scores), function(tool) {
 
-  # Add condition to immune data
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
+    mat <- immune_scores[[tool]]
 
-  # Convert to long format
-  immune_long <- tidyr::pivot_longer(
-    immune_df_matched,
-    cols = -c("Sample", all_of(condition_column)),
-    names_to = "Cell_type",
-    values_to = "Score"
-  )
+    # Samples on rows
+    df <- as.data.frame(t(mat))
+    df$Sample <- gsub("^X", "", rownames(df))
 
-  # Create plot
-  p <- ggplot2::ggplot(immune_long, ggplot2::aes_string(x = condition_column, y = "Score",
-                                                        fill = condition_column)) +
-    ggplot2::geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
-    ggplot2::geom_jitter(width = 0.2, size = 0.7, alpha = 0.6) +
-    ggplot2::facet_wrap(~ Cell_type, scales = "free_y", ncol = 3) +
-    ggplot2::scale_fill_brewer(type = "qual", palette = "Set1") +
-    ggplot2::theme_bw(base_size = 12) +
-    ggplot2::theme(
-      legend.position = "bottom",
-      strip.background = ggplot2::element_rect(fill = "grey90", color = NA),
-      strip.text = ggplot2::element_text(face = "bold"),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
-    ) +
-    ggplot2::labs(
-      title = "Immune Cell Abundances by Condition",
-      x = NULL,
-      y = "Immune Score",
-      fill = condition_column
+    # Match & attach condition
+    df <- df[df$Sample %in% metadata$SampleID, ]
+    df[[condition_column]] <- metadata[[condition_column]][
+      match(df$Sample, metadata$SampleID)
+    ]
+    df <- df[!is.na(df[[condition_column]]), ]
+
+    # Long format
+    long <- pivot_longer(
+      df,
+      cols      = -c("Sample", all_of(condition_column)),
+      names_to  = "Cell_type",
+      values_to = "Score"
+    )
+    long$Tool <- tool
+    long
+
+  }) |> bind_rows()
+
+
+  # ── 1b. Per-tool per-cell-type min-max normalisation (plot only) ───────────
+  if (scale) {
+    immune_long <- immune_long |>
+      group_by(.data$Tool, .data$Cell_type) |>
+      mutate(
+        Score_raw  = .data$Score,                   # keep raw for Wilcoxon
+        tool_min   = min(.data$Score, na.rm = TRUE),
+        tool_max   = max(.data$Score, na.rm = TRUE),
+        Score      = if_else(                # avoid 0/0 when tool is flat
+          tool_max == tool_min, 0,
+          (Score - tool_min) / (tool_max - tool_min)
+        )
+      ) |>
+      ungroup() |>
+      select(-tool_min, -tool_max)
+
+  }
+
+
+  # ── 2. Build an x-axis that groups tools within each cell-type facet ───────
+  # x = "Tool\nCondition" so bars read:  ToolA-Cond1 | ToolA-Cond2 | ToolB-Cond1 ...
+  immune_long <- immune_long |>
+    mutate(
+      x_group = factor(
+        paste0(.data$Tool, "\n", .data[[condition_column]]),
+        levels = unique(paste0(
+          rep(names(immune_scores), each = length(unique(.data[[condition_column]]))),
+          "\n",
+          rep(sort(unique(.data[[condition_column]])), times = length(names(immune_scores)))
+        ))
+      ),
+      Tool      = factor(.data$Tool, levels = names(immune_scores)),
+      Condition = .data[[condition_column]]
     )
 
-  # Add statistical comparisons
-  if (length(unique(immune_long[[condition_column]])) == 2) {
-    p <- p + ggpubr::stat_compare_means(
-      method = "wilcox.test",
-      label = "p.signif",
-      hide.ns = TRUE
+  n_tools      <- length(names(immune_scores))
+  n_conditions <- length(unique(immune_long$Condition))
+
+  # Colour palette: one shade per condition, repeated across tools
+  cond_colours <- get_palette(n_conditions = n_conditions,
+                              val_conditions = sort(unique(immune_long$Condition)))
+
+  fill_values <- cond_colours[gsub(".*\n", "", levels(immune_long$x_group))]
+
+  # ── 3. Build comparison pairs for ggpubr (one pair per tool) ───────────────
+  #   Only generated for exactly 2 conditions; extend here for >2 if needed.
+  comparison_pairs <- if (n_conditions == 2) {
+    conds <- sort(unique(immune_long$Condition))
+    lapply(names(immune_scores), function(tool) {
+      c(paste0(tool, "\n", conds[1]),
+        paste0(tool, "\n", conds[2]))
+    })
+  } else {
+    NULL
+  }
+
+  # ── 4. Vertical separator positions between tools ──────────────────────────
+  # Draw a dashed line after every n_conditions x-groups except the last tool
+  sep_positions <- if (n_tools > 1) {
+    seq(n_conditions + 0.5, (n_tools - 1) * n_conditions + 0.5, by = n_conditions)
+  } else {
+    NULL
+  }
+
+  # ── 5. Build the plot ──────────────────────────────────────────────────────
+  p <- ggplot(
+    immune_long,
+    aes(x = .data$x_group, y = .data$Score, fill = .data$Condition)
+  ) +
+    geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
+    geom_jitter(width = 0.15, size = 0.5, alpha = 0.5) +
+    scale_fill_manual(values = cond_colours) +
+    facet_wrap(~ Cell_type, scales = "free_y", ncol = 3) +
+    theme_bw(base_size = 13) +
+    theme(
+      # --- existing ---
+      legend.position    = "bottom",
+      strip.background   = element_rect(fill = "grey90", color = NA),
+      panel.grid.major.x = element_blank(),
+
+      # --- text sizes ---
+      strip.text         = element_text(face = "bold", size = 30),  # facet titles
+      axis.text.x        = element_text(angle = 45, hjust = 1, size = 25),
+      axis.text.y        = element_text(size = 20),                 # y tick labels
+      axis.title.y       = element_text(size = 23),
+      plot.title         = element_text(size = 45, face = "bold", hjust = 0.5),
+      plot.subtitle      = element_text(size = 27, colour = "grey40", hjust = 0.5),
+
+      # --- legend ---
+      legend.title       = element_text(size = 26, face = "bold"),
+      legend.text        = element_text(size = 24),
+      legend.key.size    = unit(2, "cm")                          # colour box size
+    ) +
+    labs(
+      title = "Immune Cell Abundances by Condition and Tool",
+      subtitle = if (scale) "Scores min\u002Dmax normalised per tool \u2014 Significance tested on raw scores" else NULL,
+      x     = NULL,
+      y     = if (scale) "Normalised Score (per tool)" else "Immune Score",
+      fill  = condition_column
+    )
+
+
+    # Add tool-separator lines
+  if (!is.null(sep_positions)) {
+    p <- p + geom_vline(
+      xintercept = sep_positions,
+      linetype   = "dashed",
+      colour     = "grey50",
+      linewidth  = 0.4
     )
   }
 
-  # Save plot
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_boxplots.pdf"))
-  ggplot2::ggsave(output_file, p, width = 12, height = 10)
+  # Add significance brackets (one Wilcoxon per tool pair)
+  if (!is.null(comparison_pairs)) {
+    p <- p + stat_compare_means(
+      mapping     = aes(y = if (scale) .data$Score_raw else .data$Score),   # <-- test on raw
+      comparisons = comparison_pairs,
+      method      = "wilcox.test",
+      label       = "p.signif"
+    )
+  }
 
-  message("Immune boxplots saved to: ", output_file)
+  # ── 6. Save ────────────────────────────────────────────────────────────────
+
+  n_cell_types <- length(unique(immune_long$Cell_type))
+  n_cols       <- 3
+  n_rows       <- ceiling(n_cell_types / n_cols)
+
+  # Dynamic panel size (inches): wider when more tools/conditions, taller per row
+  panel_width  <- max(3, n_tools * n_conditions * 1.1)
+  panel_height <- 6.5
+
+  plot_width   <- panel_width  * n_cols + 1      # +1 for y-axis margin
+  plot_height  <- panel_height * n_rows  + 1.5   # +1.5 for title + legend
+
+  # ---- multi-page PDF --------------------------------------------------------
+  # Split cell types into pages of `panels_per_page` facets each
+  panels_per_page <- 9   # 3 cols × 3 rows — adjust to taste
+
+  cell_types <- unique(immune_long$Cell_type)
+  page_chunks <- split(cell_types, ceiling(seq_along(cell_types) / panels_per_page))
+
+  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_boxplots.pdf"))
+
+  pdf(output_file, width = panel_width * n_cols + 1, height = panel_height * 3 + 2.5)
+
+  for (chunk in page_chunks) {
+    # This is deprecated
+    p_page <- p %+%                                  # reuse all layers, swap data
+      dplyr::filter(immune_long, .data$Cell_type %in% chunk) +
+      facet_wrap(~ Cell_type, scales = "free_y", ncol = n_cols)
+
+    # Reattach significance brackets filtered to this page's data
+    # This is not working
+    if (!is.null(comparison_pairs)) {
+      p_page <- p_page +
+        stat_compare_means(
+          comparisons = comparison_pairs,
+          method      = "wilcox.test",
+          label       = "p.signif",
+          hide.ns     = TRUE
+        )
+    }
+
+    print(p_page)
+  }
+
+  dev.off()
+
+
+
   return(p)
 }
 
@@ -303,185 +776,222 @@ create_immune_boxplots <- function(immune_scores, metadata, condition_column, ou
 #'
 #' Creates a heatmap showing immune cell abundances across samples.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune score matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
-#' @keywords internal
+#'
+#' @import ComplexHeatmap
+#' @import circlize
+#' @import grDevices
+#' @importFrom stats sd complete.cases
+#'
+#' @export
 create_immune_heatmap <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
 
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE) ||
       !requireNamespace("circlize", quietly = TRUE)) {
-    message("Skipping immune heatmap - ComplexHeatmap not available")
+    message("Skipping immune heatmap \u2014 ComplexHeatmap not available")
     return(invisible(NULL))
   }
 
-  # ----------------------------
-  # 1. Clean & preprocess data
-  # ----------------------------
+  for (tool_name in names(immune_scores)) {
 
-  # Remove zero-variance rows before scaling
-  row_sds <- apply(immune_scores, 1, sd, na.rm = TRUE)
-  immune_scores <- immune_scores[row_sds > 0, , drop = FALSE]
+    message("Creating heatmap for ", tool_name, " output")
 
-  if (nrow(immune_scores) == 0) {
-    message("No rows with non-zero variance. Skipping heatmap.")
-    return(invisible(NULL))
+    immune_df <- immune_scores[[tool_name]]
+
+    # ----------------------------
+    # 1. Clean & preprocess data
+    # ----------------------------
+
+    # Remove zero-variance rows before scaling
+    row_sds <- apply(immune_df, 1, sd, na.rm = TRUE)
+    immune_df <- immune_df[row_sds > 0, , drop = FALSE]
+
+    if (nrow(immune_df) == 0) {
+      message("No rows with non\u002Dzero variance. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+
+
+    # Z-score scaling by row
+    immune_scaled <- t(scale(t(immune_df)))
+
+    # Clean sample names (e.g. X prefixes from R)
+    colnames(immune_scaled) <- gsub("^X", "", colnames(immune_scaled))
+
+    # Remove rows or columns with any NA/NaN/Inf after scaling
+    immune_scaled <- immune_scaled[complete.cases(immune_scaled), , drop = FALSE]
+    immune_scaled <- immune_scaled[, apply(immune_scaled, 2, function(x) all(is.finite(x))), drop = FALSE]
+
+    if (nrow(immune_scaled) == 0 || ncol(immune_scaled) == 0) {
+      message("Matrix is empty after cleaning. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+
+    # ----------------------------
+    # 2. Match metadata and samples
+    # ----------------------------
+    common_samples <- base::intersect(colnames(immune_scaled), metadata$SampleID)
+
+    if (length(common_samples) == 0) {
+      message("No matching samples between immune_scores and metadata. Skipping heatmap.")
+      return(invisible(NULL))
+    }
+
+    immune_scaled <- immune_scaled[, common_samples, drop = FALSE]
+    metadata_ordered <- metadata[match(common_samples, metadata$SampleID), ]
+
+    # ----------------------------
+    # 3. Column annotation (conditions)
+    # ----------------------------
+
+    unique_conditions <- unique(metadata_ordered[[condition_column]])
+    palette <- get_palette(n_conditions = length(unique_conditions),
+                           val_conditions = unique_conditions)
+
+
+    top_annotation <- HeatmapAnnotation(
+      Condition = metadata_ordered[[condition_column]],
+      col = list(Condition = palette)
+    )
+
+    # ----------------------------
+    # 4. Create and save heatmap
+    # ----------------------------
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name,"immune_heatmap.pdf", sep="_"))
+
+    pdf(output_file, width = ncol(immune_scaled) * 0.3 + 7, height = nrow(immune_scaled) * 0.18 + 2.8)
+    ht <- Heatmap(
+      immune_scaled,
+      name = "Immune Score\n(Z\u002Dscore)",
+      col = colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
+      top_annotation = top_annotation,
+      show_row_names = TRUE,
+      show_column_names = TRUE,
+      cluster_rows = TRUE,
+      cluster_columns = TRUE,
+      row_names_side = "right",
+      column_title = "Immune Cell Abundances"
+    )
+    ComplexHeatmap::draw(ht)
+    dev.off()
+
+    message("Immune heatmap saved to: ", output_file)
+    invisible(output_file)
+
   }
-
-  # Z-score scaling by row
-  immune_scaled <- t(scale(t(immune_scores)))
-
-  # Clean sample names (e.g. X prefixes from R)
-  colnames(immune_scaled) <- gsub("^X", "", colnames(immune_scaled))
-
-  # Remove rows or columns with any NA/NaN/Inf after scaling
-  immune_scaled <- immune_scaled[complete.cases(immune_scaled), , drop = FALSE]
-  immune_scaled <- immune_scaled[, apply(immune_scaled, 2, function(x) all(is.finite(x))), drop = FALSE]
-
-  if (nrow(immune_scaled) == 0 || ncol(immune_scaled) == 0) {
-    message("Matrix is empty after cleaning. Skipping heatmap.")
-    return(invisible(NULL))
-  }
-
-  # ----------------------------
-  # 2. Match metadata and samples
-  # ----------------------------
-  common_samples <- intersect(colnames(immune_scaled), metadata$SampleID)
-
-  if (length(common_samples) == 0) {
-    message("No matching samples between immune_scores and metadata. Skipping heatmap.")
-    return(invisible(NULL))
-  }
-
-  immune_scaled <- immune_scaled[, common_samples, drop = FALSE]
-  metadata_ordered <- metadata[match(common_samples, metadata$SampleID), ]
-
-  # ----------------------------
-  # 3. Column annotation (conditions)
-  # ----------------------------
-  unique_conditions <- unique(metadata_ordered[[condition_column]])
-  n_conditions <- length(unique_conditions)
-  palette <- RColorBrewer::brewer.pal(max(3, n_conditions), "Set1")[1:n_conditions]
-  names(palette) <- unique_conditions
-
-  ha <- ComplexHeatmap::HeatmapAnnotation(
-    Condition = metadata_ordered[[condition_column]],
-    col = list(Condition = palette)
-  )
-
-  # ----------------------------
-  # 4. Create and save heatmap
-  # ----------------------------
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_heatmap.pdf"))
-
-  pdf(output_file, width = 10, height = 8)
-  ht <- ComplexHeatmap::Heatmap(
-    immune_scaled,
-    name = "Immune Score\n(Z-score)",
-    col = circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red")),
-    top_annotation = ha,
-    show_row_names = TRUE,
-    show_column_names = TRUE,
-    cluster_rows = TRUE,
-    cluster_columns = TRUE,
-    row_names_side = "left",
-    column_title = "Immune Cell Abundances"
-  )
-  draw(ht)
-  dev.off()
-
-  message("Immune heatmap saved to: ", output_file)
-  invisible(output_file)
 }
+
 
 #' Create Immune Radar Plot
 #'
 #' Creates radar plots showing immune cell profiles for different conditions.
 #'
-#' @param immune_scores Immune scores matrix
+#' @param immune_scores named list with Immune scores matrices per tool
 #' @param metadata Sample metadata
 #' @param condition_column Condition column name
 #' @param output_dir Output directory
 #' @param experiment_name Experiment name
+#'
 #' @return None (creates plot)
-#' @keywords internal
+#'
+#' @importFrom fmsb radarchart
+#' @importFrom scales alpha
+#' @import grDevices
+#' @importFrom graphics legend
+#'
+#' @export
 create_immune_radar_plot <- function(immune_scores, metadata, condition_column, output_dir, experiment_name) {
 
   if (!requireNamespace("fmsb", quietly = TRUE)) {
-    message("Skipping radar plot - fmsb package not available")
+    message("Skipping radar plot \u2014 fmsb package not available")
     return()
   }
 
-  # Prepare data
-  immune_df <- as.data.frame(t(immune_scores))
-  immune_df$Sample <- gsub("^X", "", rownames(immune_df))
 
-  # Match metadata
-  sample_order <- match(immune_df$Sample, metadata$SampleID)
-  metadata_ordered <- metadata[sample_order, ]
-  metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
+  for (tool_name in names(immune_scores)) {
 
-  immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
-  immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
-    match(immune_df_matched$Sample, metadata_ordered$SampleID)
-  ]
+    message("Creating radar plot for ", tool_name, " output")
 
-  # Calculate means for each condition
-  conditions <- unique(immune_df_matched[[condition_column]])
-  cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
+    # Prepare data
+    immune_df <- as.data.frame(t(immune_scores[[tool_name]]))
+    immune_df$Sample <- gsub("^X", "", rownames(immune_df))
 
-  radar_data <- data.frame(row.names = cell_types)
+    # Match metadata
+    sample_order <- match(immune_df$Sample, metadata$SampleID)
+    metadata_ordered <- metadata[sample_order, ]
+    metadata_ordered <- metadata_ordered[!is.na(metadata_ordered$SampleID), ]
 
-  for (condition in conditions) {
-    condition_data <- immune_df_matched[immune_df_matched[[condition_column]] == condition, cell_types, drop = FALSE]
-    radar_data[[condition]] <- colMeans(condition_data, na.rm = TRUE)
+    immune_df_matched <- immune_df[immune_df$Sample %in% metadata_ordered$SampleID, ]
+    immune_df_matched[[condition_column]] <- metadata_ordered[[condition_column]][
+      match(immune_df_matched$Sample, metadata_ordered$SampleID)
+    ]
+
+    # Calculate means for each condition
+    conditions <- unique(immune_df_matched[[condition_column]])
+    cell_types <- colnames(immune_df_matched)[!colnames(immune_df_matched) %in% c("Sample", condition_column)]
+
+    radar_data <- data.frame(row.names = cell_types)
+
+    for (condition in conditions) {
+      condition_data <- immune_df_matched[immune_df_matched[[condition_column]] == condition, cell_types, drop = FALSE]
+      radar_data[[condition]] <- colMeans(condition_data, na.rm = TRUE)
+    }
+
+
+    radar_data_t <- t(radar_data)
+    colnames(radar_data_t) <- rownames(radar_data)  # set column names to cell types
+
+    # Add max and min rows as first two rows
+    radar_data_ready <- rbind(
+      max = apply(radar_data_t, 2, max, na.rm = TRUE),
+      min = apply(radar_data_t, 2, min, na.rm = TRUE),
+      radar_data_t
+    )
+    radar_data_ready <- as.data.frame(radar_data_ready)
+
+    # Plot
+    output_file <- file.path(output_dir, paste(experiment_name, tool_name,
+                                               "immune_radar_plot.pdf", sep="_"))
+    pdf(output_file, width = 8, height = 8)
+
+    palette_cols <- get_palette(n_conditions = nrow(radar_data_ready) - 2,
+                                val_conditions = rownames(radar_data_ready)[-c(1,2)])
+
+    col_chunks <- split(colnames(radar_data_ready), 1:ceiling(ncol(radar_data_ready) / 13))
+
+    for (col_chunk in col_chunks) {
+      # Plot
+      radarchart(
+        radar_data_ready[,col_chunk],
+        axistype = 1,
+        pcol = palette_cols,
+        pfcol = alpha(palette_cols, 0.4),
+        plwd = 2,
+        cglcol = "grey",
+        cglty = 1,
+        axislabcol = "grey30",
+        caxislabels = paste0(formatC(seq(0, max(radar_data_ready[1, col_chunk]),
+                                  length.out = 5),
+                              format = "e", digits = 2),
+                             "\n"),
+        cglwd = 0.8,
+        vlcex = 0.8
+      )
+
+      legend("topright", legend = rownames(radar_data_ready)[-c(1,2)],
+             col = palette_cols,
+             lty = 1, lwd = 2, bty = "n")
+    }
+
+
+    dev.off()
+
+    message("Immune radar plot saved to: ", output_file)
   }
-
-  # fmsb requires max and min rows
-  radar_data <- rbind(
-    max = apply(radar_data, 1, max, na.rm = TRUE),
-    min = apply(radar_data, 1, min, na.rm = TRUE),
-    radar_data
-  )
-
-
-  radar_data_t <- t(radar_data[-c(1,2), ])  # remove max/min rows, transpose
-  colnames(radar_data_t) <- rownames(radar_data)[-c(1,2)]  # set column names to cell types
-
-  # Add max and min rows as first two rows
-  radar_data_ready <- rbind(
-    max = apply(radar_data_t, 2, max, na.rm = TRUE),
-    min = apply(radar_data_t, 2, min, na.rm = TRUE),
-    radar_data_t
-  )
-  radar_data_ready<-as.data.frame(radar_data_ready)
-  # Plot
-  output_file <- file.path(output_dir, paste0(experiment_name, "_immune_radar_plot.pdf"))
-  pdf(output_file, width = 8, height = 8)
-
-
-  # Plot
-  fmsb::radarchart(
-    radar_data_ready,
-    axistype = 1,
-    pcol = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
-    pfcol = scales::alpha(RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"), 0.4),
-    plwd = 2,
-    cglcol = "grey",
-    cglty = 1,
-    axislabcol = "grey30",
-    caxislabels = seq(0, max(radar_data_ready[1, ]), length.out = 5),
-    cglwd = 0.8,
-    vlcex = 0.8
-  )
-
-  legend("topright", legend = rownames(radar_data_ready)[-c(1,2)],
-         col = RColorBrewer::brewer.pal(nrow(radar_data_ready) - 2, "Set1"),
-         lty = 1, lwd = 2, bty = "n")
-  dev.off()
-
-  message("Immune radar plot saved to: ", output_file)
 }

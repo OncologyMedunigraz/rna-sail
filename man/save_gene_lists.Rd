@@ -13,6 +13,19 @@ save_gene_lists(
   fit_label = "efit"
 )
 }
+\arguments{
+\item{fit}{fit object}
+
+\item{experiment_name}{Name of the experiment}
+
+\item{output_dir}{path to the output directory}
+
+\item{fdr_threshold}{FDR threshold}
+
+\item{lfc_threshold}{log-Fold-Change threshold}
+
+\item{fit_label}{Label for the fit (default: "efit")}
+}
 \description{
 Save Gene Lists
 }

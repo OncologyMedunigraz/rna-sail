@@ -36,65 +36,10 @@ run_tf_analysis(
 \item{output_dir}{Output directory}
 
 \item{experiment_name}{Experiment name}
-
-\item{regulon_viper}{VIPER-formatted regulon}
-
-\item{tf_activities}{TF activity matrix}
-
-\item{master_regulators}{Master regulator analysis results}
-
-\item{diff_tf_results}{Differential TF analysis results}
-
-\item{regulon}{Original regulon data frame}
-
-\item{n_tfs}{Number of top TFs to include (default: 10)}
 }
 \value{
 List containing TF activity scores and differential TF analysis results
-
-ggplot object
-
-Master regulator analysis results
-
-None (invisible)
-
-None (creates plot)
 }
 \description{
 Performs transcription factor activity analysis using DoRothEA regulons and VIPER.
 }
-\keyword{Analysis}
-\keyword{Create}
-\keyword{Creates}
-\keyword{Identifies}
-\keyword{Master}
-\keyword{Network}
-\keyword{Regulator}
-\keyword{Results}
-\keyword{Run}
-\keyword{Save}
-\keyword{Saves}
-\keyword{TF}
-\keyword{VIPER's}
-\keyword{Visualization}
-\keyword{a}
-\keyword{all}
-\keyword{analysis}
-\keyword{and}
-\keyword{factor}
-\keyword{factors}
-\keyword{files.}
-\keyword{function.}
-\keyword{internal}
-\keyword{master}
-\keyword{msviper}
-\keyword{network}
-\keyword{of}
-\keyword{results}
-\keyword{targets.}
-\keyword{their}
-\keyword{to}
-\keyword{top}
-\keyword{transcription}
-\keyword{using}
-\keyword{visualization}

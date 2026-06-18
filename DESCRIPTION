@@ -2,7 +2,7 @@ Package: RNASAIL
 Type: Package
 Title: Comprehensive RNA-seq Analysis Pipeline
 Version: 2.0.0
-Author: Your Name <your.email@example.com>
+Author: Katarina Vizar Cisarova <katarina.vizar-cisarova@medunigraz.at>
 Maintainer: Michele <michele.spanu@medunigraz.at>
 Description: A comprehensive R package for RNA-seq data analysis including 
     differential expression analysis, pathway analysis, WGCNA co-expression 
@@ -14,34 +14,36 @@ RoxygenNote: 7.3.3
 Depends: 
     R (>= 4.0.0)
 Imports:
+    BiocManager,
     limma,
     edgeR,
     fgsea,
     GSVA,
-    pheatmap,
+    GenomicRanges,
     msigdbr,
     dplyr,
     ggplot2,
     ggrepel,
-    GenomicRanges,
     RColorBrewer,
     colorspace,
     ComplexHeatmap,
+    pheatmap,
     circlize,
-    clusterProfiler,
-    enrichplot,
-    STRINGdb,
-    ReactomePA,
     data.table,
+    tibble,
+    readxl,
     magrittr,
     dynamicTreeCut,
     stringr,
     scales,
     tidyverse,
+    clusterProfiler,
+    enrichplot,
+    STRINGdb,
+    ReactomePA,
     WGCNA,
     viper,
     dorothea,
-    mMCPcounter,
     rtracklayer,
     conflicted,
     matrixStats,
@@ -51,9 +53,22 @@ Imports:
     jsonlite,
     signatureSearch,
     homologene,
-    S4Vectors
+    S4Vectors,
+    xCell,
+    EPIC,
+    mMCPcounter,
+    MCPcounter,
+    quantiseqr,
+    fmsb,
+    rlang,
+    tidyr,
+    AnnotationDbi,
+    ggraph,
+    igraph,
+    gridExtra,
+    purrr,
+    methods,
 Suggests:
-    BiocManager,
     org.Mm.eg.db,
     org.Hs.eg.db,
     DOSE,

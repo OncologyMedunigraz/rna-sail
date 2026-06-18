@@ -16,32 +16,32 @@ run_complete_pipeline(
   experiment_name,
   output_dir,
   species = "mouse",
+  remove_samples = NULL,
+  covariates = NULL,
+  design_formula = NULL,
+  contrast_string = NULL,
   run_wgcna = TRUE,
   run_tf_analysis = TRUE,
+  run_ssgsea = TRUE,
   run_immune_analysis = TRUE,
   run_lincs_analysis = TRUE,
-  remove_samples = NULL,
   lfc_threshold = 1,
   color_volcano_up = "#CA3433",
   color_volcano_down = "#2B7CB6",
   genes_to_label = NULL,
-  covariates = NULL,
-  design_formula = NULL,
-  contrast_string = NULL,
   fdr_threshold = 0.05,
   point_size_volcano = 4,
   label_size_volcano = 5,
   n_labels_up = 10,
   n_labels_down = 10,
-  gsea_custom_pathways = NULL,
+  n_gsea_pathways = 30,
   n_gsea_enrich_up = 5,
   n_gsea_enrich_down = 5,
+  ssgsea_n_boxplot_pathways = 20,
   color_gsea_down = "#2B7CB6",
   color_gsea_up = "#CA3433",
   color_gsea_ns = "#C5C6C7",
-  run_ssgsea = TRUE,
-  ssgsea_extra_pathways = NULL,
-  ssgsea_n_boxplot_pathways = 20
+  extra_pathways_file = NULL
 )
 }
 \arguments{
@@ -67,15 +67,57 @@ run_complete_pipeline(
 
 \item{species}{Species ("mouse" or "human", default: "mouse")}
 
+\item{remove_samples}{Character vector of sample names to remove (optional)}
+
+\item{covariates}{covariates}
+
+\item{design_formula}{design formula}
+
+\item{contrast_string}{contrast string}
+
 \item{run_wgcna}{Whether to run WGCNA analysis (default: TRUE)}
 
 \item{run_tf_analysis}{Whether to run transcription factor analysis (default: TRUE)}
+
+\item{run_ssgsea}{Whether to run ssGSEA analysis (default: TRUE)}
 
 \item{run_immune_analysis}{Whether to run immune deconvolution (default: TRUE)}
 
 \item{run_lincs_analysis}{Whether to run LINCS connectivity analysis (default: TRUE)}
 
-\item{remove_samples}{Character vector of sample names to remove (optional)}
+\item{lfc_threshold}{log-Fold-Change threshold}
+
+\item{color_volcano_up}{(default: red)}
+
+\item{color_volcano_down}{(default: blue)}
+
+\item{genes_to_label}{which genes to label}
+
+\item{fdr_threshold}{FDR threshold}
+
+\item{point_size_volcano}{size of point in Volcano plot}
+
+\item{label_size_volcano}{size of labels in Volcano plot}
+
+\item{n_labels_up}{Number of labels for the up}
+
+\item{n_labels_down}{Number of labels for the down}
+
+\item{n_gsea_pathways}{Number of GSEA pathways}
+
+\item{n_gsea_enrich_up}{Number of Enrichment plots for the up}
+
+\item{n_gsea_enrich_down}{Number of Enrichment plots for the up}
+
+\item{ssgsea_n_boxplot_pathways}{Number of boxplots for ssGSEA pathways}
+
+\item{color_gsea_down}{(default: blue)}
+
+\item{color_gsea_up}{(default: red)}
+
+\item{color_gsea_ns}{(default: grey)}
+
+\item{extra_pathways_file}{Path to Pathways file (XLSX format)}
 }
 \value{
 List containing results from all analyses

@@ -12,8 +12,13 @@ create_expression_heatmap(
   scale_data = TRUE,
   color_mapping = NULL,
   output_file = NULL,
-  width = 10,
-  height = 8
+  min.width = 5,
+  height = 8,
+  title = NULL,
+  col_cluster = TRUE,
+  row_cluster = TRUE,
+  rank_order = TRUE,
+  long_heatmap = FALSE
 )
 }
 \arguments{
@@ -31,9 +36,19 @@ create_expression_heatmap(
 
 \item{output_file}{Output file path (optional)}
 
-\item{width}{Plot width (default: 10)}
+\item{min.width}{Plot minimum width to which add the dynamic width (default: 5)}
 
 \item{height}{Plot height (default: 8)}
+
+\item{title}{Title}
+
+\item{col_cluster}{Whether to cluster samples (default: TRUE)}
+
+\item{row_cluster}{Whether to cluster genes (default: TRUE)}
+
+\item{rank_order}{Whether to sort genes by variability prior to selection (default: TRUE)}
+
+\item{long_heatmap}{Whether to plot a long heatmap with gene labels (default: FALSE)}
 }
 \value{
 ComplexHeatmap object or base heatmap

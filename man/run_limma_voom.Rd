@@ -27,6 +27,10 @@ run_limma_voom(
 \item{experiment_name}{Name for the experiment (used in output files)}
 
 \item{output_dir}{Output directory path}
+
+\item{lfc_threshold}{log-Fold-Change threshold (default: 1)}
+
+\item{fdr_threshold}{FDR threshold (default: 0.05)}
 }
 \value{
 List containing tfit (treat results) and efit (eBayes results)

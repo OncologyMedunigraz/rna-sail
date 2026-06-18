@@ -9,9 +9,9 @@ run_immune_deconvolution(
   metadata,
   condition_column,
   species = "mouse",
-  method = "mMCPcounter",
   output_dir,
-  experiment_name
+  experiment_name,
+  method = c("all", "xCell", "MCPC", "EPIC-BRef", "EPIC-TRef", "quanTIseq")
 )
 }
 \arguments{
@@ -23,14 +23,14 @@ run_immune_deconvolution(
 
 \item{species}{Species ("mouse" or "human", default: "mouse")}
 
-\item{method}{Deconvolution method ("mMCPcounter", "MCPcounter", or "all")}
-
 \item{output_dir}{Output directory}
 
 \item{experiment_name}{Experiment name}
+
+\item{method}{Deconvolution method ("xCell", "MCPC"default: "all")}
 }
 \value{
-List containing immune cell scores and analysis results
+List containing immune cell scores (cell type x sample) and analysis results
 }
 \description{
 Performs immune cell deconvolution using multiple methods including mMCPcounter for mouse data.

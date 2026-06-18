@@ -8,7 +8,15 @@
 #' @param design_matrix Design matrix from model.matrix
 #' @param experiment_name Name for the experiment (used in output files)
 #' @param output_dir Output directory path
+#' @param lfc_threshold log-Fold-Change threshold (default: 1)
+#' @param fdr_threshold FDR threshold (default: 0.05)
+#'
 #' @return List containing tfit (treat results) and efit (eBayes results)
+#'
+#' @import limma
+#' @importFrom edgeR DGEList filterByExpr calcNormFactors
+#' @importFrom utils write.table
+#'
 #' @export
 run_limma_voom <- function(expr_data, sample_groups, contrast_matrix, design_matrix,
                            experiment_name, output_dir,
@@ -28,31 +36,31 @@ run_limma_voom <- function(expr_data, sample_groups, contrast_matrix, design_mat
 
 
   # EdgeR filtering and normalization
-  d0 <- edgeR::DGEList(expr_data)
-  keep.exprs <- edgeR::filterByExpr(d0, group = sample_groups)
+  d0 <- DGEList(expr_data)
+  keep.exprs <- filterByExpr(d0, group = sample_groups)
   d0 <- d0[keep.exprs, ]
-  d0 <- edgeR::calcNormFactors(d0)
+  d0 <- calcNormFactors(d0)
 
   # Voom transformation
-  y <- limma::voom(d0, design_matrix)
+  y <- voom(d0, design_matrix)
 
   # Linear model fitting
-  vfit <- limma::lmFit(y, design_matrix)
-  vfit <- limma::contrasts.fit(vfit, contrasts = contrast_matrix)
+  vfit <- lmFit(y, design_matrix)
+  vfit <- contrasts.fit(vfit, contrasts = contrast_matrix)
 
   # eBayes and treat
-  efit <- limma::eBayes(vfit)
-  tfit <- limma::treat(vfit, lfc = lfc_threshold)
+  efit <- eBayes(vfit)
+  tfit <- treat(vfit, lfc = lfc_threshold)
 
   # ---- Full DE tables for BOTH efit and tfit ----
-  results_efit <- limma::topTable(
+  results_efit <- topTable(
     efit,
     coef   = 1,
     number = Inf,
     sort.by = "none"
   )
 
-  results_tfit <- limma::topTreat(
+  results_tfit <- topTreat(
     tfit,
     coef = 1,
     n    = Inf
@@ -82,6 +90,9 @@ run_limma_voom <- function(expr_data, sample_groups, contrast_matrix, design_mat
 }
 
 
+
+
+
 #' Run Complete Differential Expression Pipeline
 #'
 #' Runs the complete differential expression analysis pipeline for two groups,
@@ -102,7 +113,12 @@ run_limma_voom <- function(expr_data, sample_groups, contrast_matrix, design_mat
 #'        Must include condition_column. If it contains ':' or '*', provide contrast_string.
 #' @param contrast_string Optional limma contrast string. If NULL and design has no interactions,
 #'        a default group1 vs group2 contrast is used.
+#'
 #' @return List containing DE results and summary statistics
+#'
+#' @importFrom stats as.formula model.matrix
+#' @importFrom limma makeContrasts
+#'
 #' @export
 run_differential_expression <- function(counts_data, metadata, group1_condition, group2_condition,
                                         condition_column = "condition",
@@ -202,26 +218,26 @@ run_differential_expression <- function(counts_data, metadata, group1_condition,
            "Please provide contrast_string explicitly.")
     }
 
-    design_f <- stats::as.formula(ftxt)
+    design_f <- as.formula(ftxt)
 
   } else {
     if (is.null(covariates) || length(covariates) == 0) {
-      design_f <- stats::as.formula(paste0("~ ", condition_column))
+      design_f <- as.formula(paste0("~ ", condition_column))
     } else {
-      design_f <- stats::as.formula(
+      design_f <- as.formula(
         paste0("~ ", paste(covariates, collapse = " + "), " + ", condition_column)
       )
     }
   }
 
-  design <- stats::model.matrix(design_f, data = metadata_sub)
+  design <- model.matrix(design_f, data = metadata_sub)
 
     # !!! fix to makeContrasts warning: Renaming (Intercept) to Intercept !!!
   colnames(design) <- make.names(colnames(design))
 
   # Decide contrast
   if (!is.null(contrast_string)) {
-    contrast_matrix <- limma::makeContrasts(contrasts = contrast_string, levels = design)
+    contrast_matrix <- makeContrasts(contrasts = contrast_string, levels = design)
   } else {
     # Auto-contrast: for intercept design, treated-vs-control is coefficient condition<group1>
     coef_raw  <- paste0(condition_column, group1_condition)
@@ -235,7 +251,7 @@ run_differential_expression <- function(counts_data, metadata, group1_condition,
       )
     }
 
-    contrast_matrix <- limma::makeContrasts(contrasts = coef_name, levels = design)
+    contrast_matrix <- makeContrasts(contrasts = coef_name, levels = design)
   }
   print(contrast_matrix)
   message("Using design: ", paste(deparse(design_f), collapse = " "))
@@ -307,18 +323,26 @@ run_differential_expression <- function(counts_data, metadata, group1_condition,
 }
 
 
+
 #' Summarize Differential Expression Results
 #'
+#' @param fit fit object from differential analysis
+#' @param fdr_threshold FDR threshold (default: 0.1)
+#' @param lfc_threshold log-Fold-Change threshold (default: 1)
+#' @param fit_label Label for the fit (default: "efit")
+#'
 #' @keywords internal
+#'
+#' @importFrom limma decideTests
 summarize_de_results <- function(fit,
                                  fdr_threshold = 0.1,
                                  lfc_threshold = 1,
                                  fit_label = "efit") {
 
   if (inherits(fit, "MArrayLM2")) {  # treat object
-    results <- limma::decideTests(fit, p.value = fdr_threshold)
+    results <- decideTests(fit, p.value = fdr_threshold)
   } else {
-    results <- limma::decideTests(fit, p.value = fdr_threshold, lfc = lfc_threshold)
+    results <- decideTests(fit, p.value = fdr_threshold, lfc = lfc_threshold)
   }
 
   n_up    <- sum(results == 1)
@@ -343,17 +367,29 @@ summarize_de_results <- function(fit,
 }
 
 
+
+
 #' Save Gene Lists
 #'
+#' @param fit fit object
+#' @param experiment_name Name of the experiment
+#' @param output_dir path to the output directory
+#' @param fdr_threshold FDR threshold
+#' @param lfc_threshold log-Fold-Change threshold
+#' @param fit_label Label for the fit (default: "efit")
+#'
 #' @keywords internal
+#'
+#' @importFrom limma decideTests
+#' @importFrom utils write.table
 save_gene_lists <- function(fit, experiment_name, output_dir,
                             fdr_threshold, lfc_threshold,
                             fit_label = "efit") {
 
   if (inherits(fit, "MArrayLM2")) {  # treat
-    results <- limma::decideTests(fit, p.value = fdr_threshold)
+    results <- decideTests(fit, p.value = fdr_threshold)
   } else {
-    results <- limma::decideTests(fit, p.value = fdr_threshold, lfc = lfc_threshold)
+    results <- decideTests(fit, p.value = fdr_threshold, lfc = lfc_threshold)
   }
 
   up_genes   <- rownames(results)[results == 1]

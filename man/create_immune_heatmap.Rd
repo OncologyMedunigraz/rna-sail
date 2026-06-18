@@ -13,7 +13,7 @@ create_immune_heatmap(
 )
 }
 \arguments{
-\item{immune_scores}{Immune scores matrix}
+\item{immune_scores}{named list with Immune score matrices per tool}
 
 \item{metadata}{Sample metadata}
 
@@ -29,4 +29,3 @@ None (creates plot)
 \description{
 Creates a heatmap showing immune cell abundances across samples.
 }
-\keyword{internal}

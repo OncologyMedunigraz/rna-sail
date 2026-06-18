@@ -13,7 +13,8 @@ plot_gsea_dotplot(
   padj_threshold = 0.05,
   color_up = "#E31A1C",
   color_down = "#1F78B4",
-  color_ns = "grey70"
+  color_ns = "grey70",
+  plot_title = "GSEA Results - Pathway Enrichment"
 )
 }
 \arguments{
@@ -26,6 +27,16 @@ plot_gsea_dotplot(
 \item{width}{Plot width in inches (default: 10)}
 
 \item{height}{Plot height in inches (default: 8)}
+
+\item{padj_threshold}{(default: 0.05)}
+
+\item{color_up}{(default: red)}
+
+\item{color_down}{(default: blue)}
+
+\item{color_ns}{(default: grey)}
+
+\item{plot_title}{Plot title}
 }
 \value{
 ggplot object

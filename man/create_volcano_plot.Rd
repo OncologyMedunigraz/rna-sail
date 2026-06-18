@@ -20,7 +20,8 @@ create_volcano_plot(
   n_labels_up = NULL,
   n_labels_down = NULL,
   gene_label_column = NULL,
-  highlight_genes = NULL
+  highlight_genes = NULL,
+  plot_title = "Volcano Plot - Differential Gene Expression"
 )
 }
 \arguments{
@@ -37,6 +38,26 @@ create_volcano_plot(
 \item{width}{Plot width in inches (default: 10)}
 
 \item{height}{Plot height in inches (default: 8)}
+
+\item{color_up}{(default: red)}
+
+\item{color_down}{(default: blue)}
+
+\item{color_ns}{(default: grey)}
+
+\item{point_size}{(default: 2.5)}
+
+\item{label_size}{(default: 3.5)}
+
+\item{n_labels_up}{How many labels for the up (default: NULL)}
+
+\item{n_labels_down}{How many labels for the down (default: NULL)}
+
+\item{gene_label_column}{Which is the column to label genes (default: NULL)}
+
+\item{highlight_genes}{Which genes to highlight (default: NULL)}
+
+\item{plot_title}{Plot title}
 }
 \value{
 ggplot object

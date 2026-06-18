@@ -13,7 +13,7 @@ create_immune_radar_plot(
 )
 }
 \arguments{
-\item{immune_scores}{Immune scores matrix}
+\item{immune_scores}{named list with Immune scores matrices per tool}
 
 \item{metadata}{Sample metadata}
 
@@ -29,4 +29,3 @@ None (creates plot)
 \description{
 Creates radar plots showing immune cell profiles for different conditions.
 }
-\keyword{internal}

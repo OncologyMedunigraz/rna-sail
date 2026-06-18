@@ -26,101 +26,15 @@ run_wgcna_analysis(
 
 \item{min_module_size}{Minimum module size (default: 30)}
 
-\item{output_dir}{Output directory}
+\item{output_dir}{Output directory for plots and results}
 
-\item{experiment_name}{Experiment name}
+\item{experiment_name}{Name for the experiment}
 
 \item{n_threads}{Number of threads for WGCNA (default: 2)}
-
-\item{moduleTraitCor}{Module-trait correlation matrix}
-
-\item{moduleTraitP}{Module-trait p-value matrix}
-
-\item{trait_data}{Trait data}
-
-\item{trait}{Trait vector}
-
-\item{gene_results}{Gene significance results}
-
-\item{module_name}{Module name to plot}
-
-\item{MEs}{Module eigengenes}
-
-\item{module_trait_results}{Module-trait correlation results}
-
-\item{gene_module_analysis}{Gene significance analysis results}
-
-\item{datExpr}{Expression data used in WGCNA}
-
-\item{moduleColors}{Module assignments}
-
-\item{n_hub_genes}{Number of hub genes to return per module (default: 10)}
 }
 \value{
 List containing module assignments, eigengenes, and trait correlations
-
-None (creates plot)
-
-None (creates plot)
-
-Data frame with gene significance and module membership
-
-None (creates plot)
-
-None (invisible)
-
-Data frame with hub genes for each module
 }
 \description{
 Performs Weighted Gene Co-expression Network Analysis (WGCNA) to identify gene modules.
 }
-\keyword{(highly}
-\keyword{Analyze}
-\keyword{Calculates}
-\keyword{Creates}
-\keyword{Eigengenes}
-\keyword{Gene}
-\keyword{Genes}
-\keyword{Get}
-\keyword{Hub}
-\keyword{Identifies}
-\keyword{Membership}
-\keyword{Module}
-\keyword{Modules}
-\keyword{Plot}
-\keyword{Results}
-\keyword{Save}
-\keyword{Saves}
-\keyword{Significance}
-\keyword{WGCNA}
-\keyword{all}
-\keyword{and}
-\keyword{association.}
-\keyword{connected}
-\keyword{each}
-\keyword{eigengene}
-\keyword{expression}
-\keyword{files.}
-\keyword{for}
-\keyword{from}
-\keyword{gene}
-\keyword{genes}
-\keyword{genes)}
-\keyword{hub}
-\keyword{internal}
-\keyword{membership}
-\keyword{membership.}
-\keyword{module}
-\keyword{module.}
-\keyword{of}
-\keyword{patterns.}
-\keyword{plot}
-\keyword{plots}
-\keyword{results}
-\keyword{scatter}
-\keyword{showing}
-\keyword{significance}
-\keyword{to}
-\keyword{trait}
-\keyword{vs}
-\keyword{within}

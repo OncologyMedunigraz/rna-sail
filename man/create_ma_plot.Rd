@@ -9,7 +9,8 @@ create_ma_plot(
   fdr_threshold = 0.05,
   output_file = NULL,
   width = 8,
-  height = 6
+  height = 6,
+  plot_title = "MA Plot - Mean vs Log Fold Change"
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ create_ma_plot(
 \item{width}{Plot width (default: 8)}
 
 \item{height}{Plot height (default: 6)}
+
+\item{plot_title}{Plot Title}
 }
 \value{
 ggplot object

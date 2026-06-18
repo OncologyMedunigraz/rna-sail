@@ -9,11 +9,12 @@ create_immune_boxplots(
   metadata,
   condition_column,
   output_dir,
-  experiment_name
+  experiment_name,
+  scale = TRUE
 )
 }
 \arguments{
-\item{immune_scores}{Immune scores matrix}
+\item{immune_scores}{named list with Immune scores matrices per tool}
 
 \item{metadata}{Sample metadata}
 
@@ -22,6 +23,8 @@ create_immune_boxplots(
 \item{output_dir}{Output directory}
 
 \item{experiment_name}{Experiment name}
+
+\item{scale}{whether or not to scale the scores (default: TRUE)}
 }
 \value{
 ggplot object
@@ -29,4 +32,3 @@ ggplot object
 \description{
 Creates boxplots comparing immune cell abundances between conditions.
 }
-\keyword{internal}

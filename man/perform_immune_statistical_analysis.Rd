@@ -13,7 +13,7 @@ perform_immune_statistical_analysis(
 )
 }
 \arguments{
-\item{immune_scores}{Immune scores matrix (cell types x samples)}
+\item{immune_scores}{named list with Immune scores matrices (cell types x samples) per tool}
 
 \item{metadata}{Sample metadata}
 
