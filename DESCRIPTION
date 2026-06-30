@@ -89,7 +89,7 @@ Remotes:
     github::dviraran/xCell,
     github::GfellerLab/EPIC,
     github::cit-bioinfo/mMCP-counter,
-    github::ebecht/MCPcounter,
+    github::ebecht/MCPcounter/Source,
     github::federicomarini/quantiseqr
 Suggests:
     org.Mm.eg.db,
