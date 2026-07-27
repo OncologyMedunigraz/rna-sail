@@ -339,6 +339,7 @@ create_pca_plot <- function(expr_data, metadata, color_by, shape_by = NULL,
 #' @param long_heatmap Whether to plot a long heatmap with gene labels (default: FALSE)
 #' @param title Title
 #' @param row_cluster Whether to cluster genes (default: TRUE)
+#' @param na_colour Colour for NAs in the data (default: "grey76")
 #'
 #' @return ComplexHeatmap object or base heatmap
 #'
@@ -353,7 +354,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
                                       output_file = NULL, min.width = 5, height = 8,
                                       title = NULL, col_cluster = TRUE, row_cluster = TRUE,
                                       rank_order = TRUE,
-                                      long_heatmap = FALSE) {
+                                      long_heatmap = FALSE, na_colour = "grey76") {
 
   message("starting heatmap ")
 
@@ -363,7 +364,6 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
   expr_subset <- expr_data[top_genes, , drop = FALSE]
 
   expr_scaled <- if (scale_data) t(scale(t(expr_subset))) else as.matrix(expr_subset)
-  expr_scaled[is.na(expr_scaled)] <- 0
   message("starting heatmap 1")
 
   colnames(expr_scaled) <- gsub("^X", "", colnames(expr_scaled))
@@ -422,6 +422,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
               if (scale_data) c(-2, 0, 2) else {c(min(expr_scaled, na.rm = TRUE), 0, max(expr_scaled, na.rm = TRUE))},
               c("blue", "white", "red")
           ),
+          na_col = na_colour,
           top_annotation = ha,
           show_row_names = long_heatmap,
           row_names_side = "left",
