@@ -414,7 +414,7 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
 
       message("starting heatmap 6")
 
-      if (exclude.na) {
+      if (exclude_na) {
           expr_scaled[is.na(expr_scaled)] <- 0
       }
       
