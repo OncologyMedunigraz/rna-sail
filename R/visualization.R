@@ -353,8 +353,8 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
                                       scale_data = TRUE, color_mapping = NULL,
                                       output_file = NULL, min.width = 5, height = 8,
                                       title = NULL, col_cluster = TRUE, row_cluster = TRUE,
-                                      rank_order = TRUE,
-                                      long_heatmap = FALSE, na_colour = "grey76") {
+                                      rank_order = TRUE, long_heatmap = FALSE, 
+                                      exclude_na = TRUE, na_colour = "grey76") {
 
   message("starting heatmap ")
 
@@ -414,6 +414,10 @@ create_expression_heatmap <- function(expr_data, metadata, annotation_columns, n
 
       message("starting heatmap 6")
 
+      if (exclude.na) {
+          expr_scaled[is.na(expr_scaled)] <- 0
+      }
+      
       # !!! Fixed colour intensity scale for non-norm. data, show_row_names, row_names_side, row_name_gp, col_cluster, title !!!
       ht <- Heatmap(
           expr_scaled,
